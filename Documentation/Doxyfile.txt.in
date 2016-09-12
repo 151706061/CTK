@@ -751,8 +751,7 @@ RECURSIVE              = YES
 EXCLUDE                = @CTK_BINARY_DIR@ \
                          @CTK_SOURCE_DIR@/Utilities \
                          @CTK_SOURCE_DIR@/CMake/ctkDashboardDriverScript.cmake \
-                         @CTK_SOURCE_DIR@/CMake/ctkDashboardScript.TEMPLATE.cmake \
-                         @CTK_SOURCE_DIR@/Libs/Visualization/XIP
+                         @CTK_SOURCE_DIR@/CMake/ctkDashboardScript.TEMPLATE.cmake
 
 # The EXCLUDE_SYMLINKS tag can be used to select whether or not files or
 # directories that are symbolic links (a Unix file system feature) are excluded
@@ -1608,7 +1607,10 @@ EXPAND_AS_DEFINED      =
 # that are alone on a line, have an all uppercase name, and do not end with a
 # semicolon, because these will confuse the parser if not removed.
 
-SKIP_FUNCTION_MACROS   = NO
+# CTK Note: Changed this back to the default YES,
+# in order to avoid trouble using f.ex. Q_DECLARE_PRIVATE(classname),
+# which hides later method declarations.
+SKIP_FUNCTION_MACROS   = YES
 
 #---------------------------------------------------------------------------
 # Configuration::additions related to external references

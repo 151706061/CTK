@@ -6,6 +6,7 @@ add_subdirectory(Cpp)
 include_directories(${CMAKE_CURRENT_SOURCE_DIR}/Cpp)
 
 set(fwtest_plugins
+  app_test
   pluginA_test
   pluginA1_test
   pluginS_test
@@ -22,6 +23,9 @@ set(metatypetest_plugins
 
 add_subdirectory(org.commontk.pluginfwtest)
 add_subdirectory(FrameworkTestPlugins)
+
+add_subdirectory(org.commontk.pluginfwtest.perf)
+add_subdirectory(org.commontk.eventadmintest.perf)
 
 add_subdirectory(org.commontk.configadmintest)
 add_subdirectory(org.commontk.eventadmintest)

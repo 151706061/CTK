@@ -5,6 +5,7 @@ set(TEST_SOURCES
   ctkAddRemoveComboBoxTest1.cpp
   ctkAxesWidgetTest1.cpp
   ctkButtonGroupTest1.cpp
+  ctkCheckableModelHelperTest1.cpp
   ctkCheckBoxPixmapsTest1.cpp
   ctkCheckBoxTest1.cpp
   ctkCheckableComboBoxTest1.cpp
@@ -20,17 +21,32 @@ set(TEST_SOURCES
   ctkColorPickerButtonTest1.cpp
   ctkComboBoxTest1.cpp
   ctkCompleterTest1.cpp
+  ctkConsoleTest.cpp
   ctkConsoleTest1.cpp
   ctkCoordinatesWidgetTest.cpp
   ctkCoordinatesWidgetTest1.cpp
+  ctkCoordinatesWidgetValueProxyTest.cpp
   ctkCrosshairLabelTest1.cpp
   ctkDirectoryButtonTest1.cpp
+  ctkDoubleRangeSliderTest.cpp
   ctkDoubleRangeSliderTest1.cpp
   ctkDoubleRangeSliderTest2.cpp
+  ctkDoubleRangeSliderValueProxyTest.cpp
+  ctkDoubleSliderTest.cpp
   ctkDoubleSliderTest1.cpp
-  ctkDoubleSliderTest2.cpp
+  ctkDoubleSliderValueProxyTest.cpp
+  ctkDoubleSpinBoxTest.cpp
+  ctkDoubleSpinBoxTest1.cpp
+  ctkDoubleSpinBoxValueProxyTest.cpp
   ctkDynamicSpacerTest1.cpp
   ctkDynamicSpacerTest2.cpp
+  ctkErrorLogFDMessageHandlerWithThreadsTest1.cpp
+  ctkErrorLogModelTest1.cpp
+  ctkErrorLogModelEntryGroupingTest1.cpp
+  ctkErrorLogModelTerminalOutputTest1.cpp
+  ctkErrorLogModelTest4.cpp
+  ctkErrorLogQtMessageHandlerWithThreadsTest1.cpp
+  ctkErrorLogStreamMessageHandlerWithThreadsTest1.cpp
   ctkErrorLogWidgetTest1.cpp
   ctkExpandButtonTest1.cpp
   ctkExpandableWidgetTest1.cpp
@@ -39,10 +55,12 @@ set(TEST_SOURCES
   ctkFittedTextBrowserTest1.cpp
   ctkFlowLayoutTest1.cpp
   ctkFontButtonTest.cpp
+  ctkHistogramTest1.cpp
   ctkLayoutManagerTest1.cpp
   ctkMaterialPropertyPreviewLabelTest1.cpp
   ctkMaterialPropertyWidgetTest1.cpp
   ctkMaterialPropertyWidgetTest2.cpp
+  ctkMatrixWidgetTest.cpp
   ctkMatrixWidgetTest1.cpp
   ctkMatrixWidgetTest2.cpp
   ctkMenuButtonTest1.cpp
@@ -55,13 +73,16 @@ set(TEST_SOURCES
   ctkPathListWidgetTest.cpp
   ctkPathListWidgetWithButtonsTest.cpp
   ctkPopupWidgetTest1.cpp
+  ctkPushButtonTest.cpp
   ctkProxyStyleTest1.cpp
   ctkRangeSliderTest.cpp
   ctkRangeSliderTest1.cpp
+  ctkRangeWidgetTest.cpp
   ctkRangeWidgetTest1.cpp
-  ctkRangeWidgetTest2.cpp
+  ctkRangeWidgetValueProxyTest.cpp
   ctkDateRangeWidgetTest1.cpp
   ctkScreenshotDialogTest1.cpp
+  ctkSearchBoxTest.cpp
   ctkSearchBoxTest1.cpp
   ctkSearchBoxTest2.cpp
   ctkSettingsPanelTest.cpp
@@ -69,11 +90,16 @@ set(TEST_SOURCES
   ctkSettingsTest1.cpp
   ctkSettingsDialogTest1.cpp
   ctkSignalMapperTest1.cpp
+  ctkSliderWidgetTest.cpp
   ctkSliderWidgetTest1.cpp
   ctkSliderWidgetTest2.cpp
+  ctkSliderWidgetValueProxyTest.cpp
   ctkThumbnailListWidgetTest1.cpp
   ctkThumbnailLabelTest1.cpp
   ctkToolTipTrapperTest1.cpp
+  ctkTransferFunctionTest1.cpp
+  ctkTransferFunctionRepresentationTest1.cpp
+  ctkTransferFunctionRepresentationTest2.cpp
   ctkTreeComboBoxTest1.cpp
   ctkWidgetsUtilsTest1.cpp
   ctkWidgetsUtilsTestGrabWidget.cpp
@@ -170,31 +196,66 @@ set(Tests_MOC_SRCS
   )
 
 if(CTK_USE_QTTESTING)
+  include(${CMAKE_SOURCE_DIR}/Libs/QtTesting/CMake/ctkQtTesting.cmake)
   ctkQtTesting(Tests_SRCS Tests_MOC_SRCS Tests_UI_FORMS Tests_RESOURCES)
 endif()
 
-set(Tests_MOC_CPP)
-QT4_WRAP_CPP(Tests_MOC_CPP ${Tests_MOC_SRCS})
-QT4_GENERATE_MOCS(
+set(Tests_MOC_CPPS
+  ctkConsoleTest.cpp
   ctkCoordinatesWidgetTest.cpp
+  ctkCoordinatesWidgetValueProxyTest.cpp
+  ctkDoubleRangeSliderTest.cpp
+  ctkDoubleRangeSliderValueProxyTest.cpp
+  ctkDoubleSliderTest.cpp
+  ctkDoubleSliderValueProxyTest.cpp
+  ctkDoubleSpinBoxTest.cpp
+  ctkDoubleSpinBoxValueProxyTest.cpp
   ctkFlatProxyModelTest.cpp
   ctkFontButtonTest.cpp
   ctkLanguageComboBoxTest.cpp
+  ctkMatrixWidgetTest.cpp
   ctkMessageBoxDontShowAgainTest.cpp
   ctkPathListWidgetTest.cpp
   ctkPathListWidgetWithButtonsTest.cpp
+  ctkPushButtonTest.cpp
   ctkRangeSliderTest.cpp
+  ctkRangeWidgetTest.cpp
+  ctkRangeWidgetValueProxyTest.cpp
+  ctkSearchBoxTest.cpp
   ctkSettingsPanelTest.cpp
+  ctkSliderWidgetTest.cpp
+  ctkSliderWidgetValueProxyTest.cpp
   )
+
+set(Tests_MOC_CPP)
 set(Tests_UI_CPP)
-if(TEST_UI_FORMS)
-  QT4_WRAP_UI(Tests_UI_CPP ${Tests_UI_FORMS})
-endif()
 set(Tests_RESOURCES_SRCS)
-QT4_ADD_RESOURCES(Tests_RESOURCES_SRCS ${Tests_RESOURCES})
+if(CTK_QT_VERSION VERSION_GREATER "4")
+  qt5_wrap_cpp(Tests_MOC_CPP ${Tests_MOC_SRCS})
+  qt5_generate_mocs(${Tests_MOC_CPPS})
+  if(TEST_UI_FORMS)
+    qt5_wrap_ui(Tests_UI_CPP ${Tests_UI_FORMS})
+  endif()
+  qt5_add_resources(Tests_RESOURCES_SRCS ${Tests_RESOURCES})
+else()
+  QT4_WRAP_CPP(Tests_MOC_CPP ${Tests_MOC_SRCS})
+  QT4_GENERATE_MOCS(${Tests_MOC_CPPS})
+  if(TEST_UI_FORMS)
+    QT4_WRAP_UI(Tests_UI_CPP ${Tests_UI_FORMS})
+  endif()
+  QT4_ADD_RESOURCES(Tests_RESOURCES_SRCS ${Tests_RESOURCES})
+endif()
 
 add_executable(${KIT}CppTests ${Tests} ${Tests_SRCS} ${Tests_MOC_CPP} ${Tests_UI_CPP} ${Tests_RESOURCES_SRCS})
 target_link_libraries(${KIT}CppTests ${LIBRARY_NAME})
+
+if(CTK_QT_VERSION VERSION_GREATER "4")
+  list(APPEND KIT_target_libraries Qt5::Test)
+  if(CTK_USE_QTTESTING)
+    list(APPEND KIT_target_libraries Qt5::Xml Qt5::XmlPatterns)
+  endif()
+  target_link_libraries(${KIT}CppTests ${KIT_target_libraries})
+endif()
 
 #
 # Add Tests
@@ -204,6 +265,7 @@ SIMPLE_TEST( ctkActionsWidgetTest1 )
 SIMPLE_TEST( ctkAddRemoveComboBoxTest1 )
 SIMPLE_TEST( ctkAxesWidgetTest1 )
 SIMPLE_TEST( ctkButtonGroupTest1 )
+SIMPLE_TEST( ctkCheckableModelHelperTest1 )
 SIMPLE_TEST( ctkCheckBoxPixmapsTest1 )
 SIMPLE_TEST( ctkCheckBoxTest1 )
 SIMPLE_TEST( ctkCheckableComboBoxTest1 )
@@ -219,18 +281,33 @@ SIMPLE_TEST( ctkColorDialogTest2 )
 SIMPLE_TEST( ctkColorPickerButtonTest1 )
 SIMPLE_TEST( ctkComboBoxTest1 )
 SIMPLE_TEST( ctkCompleterTest1 )
+SIMPLE_TEST( ctkConsoleTest )
 SIMPLE_TEST( ctkConsoleTest1 )
 SIMPLE_TEST( ctkCoordinatesWidgetTest )
 SIMPLE_TEST( ctkCoordinatesWidgetTest1 )
+SIMPLE_TEST( ctkCoordinatesWidgetValueProxyTest )
 SIMPLE_TEST( ctkCrosshairLabelTest1 )
 SIMPLE_TEST( ctkDateRangeWidgetTest1 )
 SIMPLE_TEST( ctkDirectoryButtonTest1 )
+SIMPLE_TEST( ctkDoubleRangeSliderTest )
 SIMPLE_TEST( ctkDoubleRangeSliderTest1 )
 SIMPLE_TEST( ctkDoubleRangeSliderTest2 )
+SIMPLE_TEST( ctkDoubleRangeSliderValueProxyTest )
+SIMPLE_TEST( ctkDoubleSliderTest )
 SIMPLE_TEST( ctkDoubleSliderTest1 )
-SIMPLE_TEST( ctkDoubleSliderTest2 )
+SIMPLE_TEST( ctkDoubleSliderValueProxyTest )
+SIMPLE_TEST( ctkDoubleSpinBoxTest )
+SIMPLE_TEST( ctkDoubleSpinBoxTest1 )
+SIMPLE_TEST( ctkDoubleSpinBoxValueProxyTest )
 SIMPLE_TEST( ctkDynamicSpacerTest1 )
 SIMPLE_TEST( ctkDynamicSpacerTest2 )
+SIMPLE_TEST( ctkErrorLogFDMessageHandlerWithThreadsTest1 )
+SIMPLE_TEST( ctkErrorLogModelTest1 )
+SIMPLE_TEST( ctkErrorLogModelEntryGroupingTest1 )
+SIMPLE_TEST( ctkErrorLogModelTerminalOutputTest1 --test-launcher $<TARGET_FILE:${KIT}CppTests>)
+SIMPLE_TEST( ctkErrorLogModelTest4 )
+SIMPLE_TEST( ctkErrorLogQtMessageHandlerWithThreadsTest1 )
+SIMPLE_TEST( ctkErrorLogStreamMessageHandlerWithThreadsTest1 )
 SIMPLE_TEST( ctkErrorLogWidgetTest1 )
 SIMPLE_TEST( ctkExampleUseOfWorkflowWidgetUsingDerivedSteps )
 SIMPLE_TEST( ctkExampleUseOfWorkflowWidgetUsingSignalsAndSlots )
@@ -241,11 +318,13 @@ SIMPLE_TEST( ctkFileDialogTest1 )
 SIMPLE_TEST( ctkFittedTextBrowserTest1 )
 SIMPLE_TEST( ctkFlowLayoutTest1 )
 SIMPLE_TEST( ctkFontButtonTest )
+SIMPLE_TEST( ctkHistogramTest1 )
 SIMPLE_TEST( ctkLanguageComboBoxTest )
 SIMPLE_TEST( ctkLayoutManagerTest1 )
 SIMPLE_TEST( ctkMaterialPropertyPreviewLabelTest1 )
 SIMPLE_TEST( ctkMaterialPropertyWidgetTest1 )
 SIMPLE_TEST( ctkMaterialPropertyWidgetTest2 )
+SIMPLE_TEST( ctkMatrixWidgetTest )
 SIMPLE_TEST( ctkMatrixWidgetTest1 )
 SIMPLE_TEST( ctkMatrixWidgetTest2 )
 SIMPLE_TEST( ctkMenuButtonTest1 )
@@ -259,12 +338,14 @@ SIMPLE_TEST( ctkPathListWidgetTest )
 SIMPLE_TEST( ctkPathListWidgetWithButtonsTest )
 SIMPLE_TEST( ctkPopupWidgetTest1 )
 SIMPLE_TEST( ctkProxyStyleTest1 )
+SIMPLE_TEST( ctkPushButtonTest )
 SIMPLE_TEST( ctkRangeSliderTest )
 SIMPLE_TEST( ctkRangeSliderTest1 )
+SIMPLE_TEST( ctkRangeWidgetTest )
 SIMPLE_TEST( ctkRangeWidgetTest1 )
-SIMPLE_TEST( ctkRangeWidgetTest2 )
-SIMPLE_TEST( ctkResizableFrameTest1 )
+SIMPLE_TEST( ctkRangeWidgetValueProxyTest )
 SIMPLE_TEST( ctkScreenshotDialogTest1 )
+SIMPLE_TEST( ctkSearchBoxTest )
 SIMPLE_TEST( ctkSearchBoxTest1 )
 SIMPLE_TEST( ctkSearchBoxTest2 )
 SIMPLE_TEST( ctkSettingsDialogTest1 )
@@ -272,11 +353,16 @@ SIMPLE_TEST( ctkSettingsPanelTest )
 SIMPLE_TEST( ctkSettingsPanelTest1 )
 SIMPLE_TEST( ctkSettingsTest1 )
 SIMPLE_TEST( ctkSignalMapperTest1 )
+SIMPLE_TEST( ctkSliderWidgetTest )
 SIMPLE_TEST( ctkSliderWidgetTest1 )
 SIMPLE_TEST( ctkSliderWidgetTest2 )
+SIMPLE_TEST( ctkSliderWidgetValueProxyTest )
 SIMPLE_TEST( ctkThumbnailListWidgetTest1 )
 SIMPLE_TEST( ctkThumbnailLabelTest1 )
 SIMPLE_TEST( ctkToolTipTrapperTest1 )
+SIMPLE_TEST( ctkTransferFunctionTest1 )
+SIMPLE_TEST( ctkTransferFunctionRepresentationTest1 )
+SIMPLE_TEST( ctkTransferFunctionRepresentationTest2 )
 SIMPLE_TEST( ctkTreeComboBoxTest1 )
 SIMPLE_TEST( ctkWidgetsUtilsTest1 )
 SIMPLE_TEST( ctkWidgetsUtilsTestGrabWidget )
@@ -287,7 +373,7 @@ SIMPLE_TEST( ctkWorkflowWidgetTest2 )
 # Add Tests expecting CTKData to be set
 #
 if(EXISTS "${CTKData_DIR}")
-  set(baseline_relative_location "Libs/Widgets") 
+  set(baseline_relative_location "Libs/Widgets")
   SIMPLE_TEST_WITH_DATA( ctkCrosshairLabelTest2 ${baseline_relative_location})
 endif()
 

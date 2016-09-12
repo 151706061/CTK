@@ -23,6 +23,7 @@
 #include <QFile>
 
 // CTK includes
+#include "ctkErrorLogContext.h"
 #include "ctkErrorLogFDMessageHandler.h"
 #include "ctkErrorLogFDMessageHandler_p.h"
 #include "ctkUtils.h"
@@ -44,7 +45,7 @@
 // --------------------------------------------------------------------------
 ctkFDHandler::ctkFDHandler(ctkErrorLogFDMessageHandler* messageHandler,
                            ctkErrorLogLevel::LogLevel logLevel,
-                           ctkErrorLogModel::TerminalOutput terminalOutput)
+                           ctkErrorLogTerminalOutput::TerminalOutput terminalOutput)
 {
   this->MessageHandler = messageHandler;
   this->LogLevel = logLevel;
@@ -76,7 +77,7 @@ void ctkFDHandler::setupPipe()
 // --------------------------------------------------------------------------
 FILE* ctkFDHandler::terminalOutputFile()
 {
-  return this->TerminalOutput == ctkErrorLogModel::StandardOutput ? stdout : stderr;
+  return this->TerminalOutput == ctkErrorLogTerminalOutput::StandardOutput ? stdout : stderr;
 }
 
 // --------------------------------------------------------------------------
@@ -208,6 +209,7 @@ void ctkFDHandler::run()
       ctk::qtHandleToString(QThread::currentThreadId()),
       this->LogLevel,
       this->MessageHandler->handlerPrettyName(),
+      ctkErrorLogContext(line),
       line);
     }
 }
@@ -252,8 +254,8 @@ ctkErrorLogFDMessageHandler::ctkErrorLogFDMessageHandler() :
   Superclass(), d_ptr(new ctkErrorLogFDMessageHandlerPrivate())
 {
   Q_D(ctkErrorLogFDMessageHandler);
-  d->StdOutFDHandler = new ctkFDHandler(this, ctkErrorLogLevel::Info, ctkErrorLogModel::StandardOutput);
-  d->StdErrFDHandler = new ctkFDHandler(this, ctkErrorLogLevel::Critical, ctkErrorLogModel::StandardError);
+  d->StdOutFDHandler = new ctkFDHandler(this, ctkErrorLogLevel::Info, ctkErrorLogTerminalOutput::StandardOutput);
+  d->StdErrFDHandler = new ctkFDHandler(this, ctkErrorLogLevel::Critical, ctkErrorLogTerminalOutput::StandardError);
 }
 
 // --------------------------------------------------------------------------

@@ -67,7 +67,11 @@ void ctkPathListWidgetWithButtonsTester::testButtons()
   topLevel.layout()->addWidget(&pathListButtons);
 
   topLevel.show();
+#if (QT_VERSION >= 0x50000)
+  QTest::qWaitForWindowActive(&topLevel);
+#else
   QTest::qWaitForWindowShown(&topLevel);
+#endif
 
   struct CloseModalDialog : public QRunnable
   {
@@ -75,6 +79,7 @@ void ctkPathListWidgetWithButtonsTester::testButtons()
     {
       QTest::qWait(1000);
       QTimer::singleShot(0, QApplication::activeModalWidget(), SLOT(accept()));
+      QTest::qWait(1000);
     }
   };
   QThreadPool::globalInstance()->start(new CloseModalDialog);

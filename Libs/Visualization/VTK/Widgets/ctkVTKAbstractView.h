@@ -48,9 +48,13 @@ class CTK_VISUALIZATION_VTK_WIDGETS_EXPORT ctkVTKAbstractView : public QWidget
   Q_PROPERTY(bool gradientBackground READ gradientBackground WRITE setGradientBackground)
   Q_PROPERTY(bool renderEnabled READ renderEnabled WRITE setRenderEnabled)
   /// This property controls whether a corner annotation is visible with the
-  /// last FPS value.
+  /// last frames per second (FPS) value.
   /// false by default.
   Q_PROPERTY(bool fpsVisible READ isFPSVisible WRITE setFPSVisible)
+  /// This property controls whether the render window uses depth peeling or
+  /// not.
+  /// false by default.
+  Q_PROPERTY(bool useDepthPeeling READ useDepthPeeling WRITE setUseDepthPeeling)
 public:
 
   typedef QWidget Superclass;
@@ -88,6 +92,10 @@ public Q_SLOTS:
 
   /// Show/Hide the FPS annotation
   void setFPSVisible(bool show);
+
+  /// Set the useDepthPeeling property value.
+  /// \sa useDepthPeeling
+  void setUseDepthPeeling(bool use);
 
 public:
   /// Get underlying RenderWindow
@@ -128,6 +136,25 @@ public:
 
   /// Return the current FPS
   double fps()const;
+
+  /// Return the useDepthPeeling property value.
+  /// \sa useDepthPeeling
+  bool useDepthPeeling()const;
+
+  /// Set the default number of multisamples to use. Note that a negative
+  /// value means "auto", which means the renderer will attempt to select
+  /// the maximum number (but is not guaranteed to work).
+  ///
+  /// WARNING: Multisampling should be set *before* creation of the
+  /// OpenGL context (e.g., initializing the rendering window) in order
+  /// to have an effect. Consider using setMultisamples before
+  /// instantiating ctkVTKAbstractView objects.
+  /// \sa multiSamples
+  static void setMultiSamples(int);
+
+  /// Return the current multisamples default
+  /// \sa setMultiSamples()
+  static int multiSamples();
 
   virtual QSize minimumSizeHint()const;
   virtual QSize sizeHint()const;

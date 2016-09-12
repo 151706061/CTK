@@ -6,6 +6,13 @@ project(CTKWidgets)
 
 set(KIT_export_directive "CTK_WIDGETS_EXPORT")
 
+# add local include directory for FreeBSD
+# (QtOpengl can't find GL/gl.h)
+# actual bug: https://bugs.freebsd.org/bugzilla/show_bug.cgi?id=195105
+if(CMAKE_SYSTEM_NAME STREQUAL FreeBSD)
+  include_directories("/usr/local/include")
+endif()
+
 #
 # Add the libraries QtTesting
 #
@@ -34,6 +41,8 @@ set(KIT_SRCS
   ctkCheckableComboBox.h
   ctkCheckableHeaderView.cpp
   ctkCheckableHeaderView.h
+  ctkCheckableModelHelper.cpp
+  ctkCheckableModelHelper.h
   ctkCheckBox.cpp
   ctkCheckBox.h
   ctkCheckBoxPixmaps.cpp
@@ -57,6 +66,7 @@ set(KIT_SRCS
   ctkConsole_p.h
   ctkCoordinatesWidget.cpp
   ctkCoordinatesWidget.h
+  ctkCoordinatesWidget_p.h
   ctkCrosshairLabel.cpp
   ctkCrosshairLabel.h
   ctkDateRangeWidget.cpp
@@ -67,8 +77,12 @@ set(KIT_SRCS
   ctkDoubleRangeSlider.h
   ctkDoubleSlider.cpp
   ctkDoubleSlider.h
+  ctkDoubleSpinBox.cpp
+  ctkDoubleSpinBox.h
   ctkDynamicSpacer.cpp
   ctkDynamicSpacer.h
+  ctkErrorLogModel.cpp
+  ctkErrorLogModel.h
   ctkErrorLogStatusMessageHandler.cpp
   ctkErrorLogStatusMessageHandler.h
   ctkErrorLogWidget.cpp
@@ -87,12 +101,20 @@ set(KIT_SRCS
   ctkFlowLayout.h
   ctkFontButton.cpp
   ctkFontButton.h
+  ctkHistogram.cpp
+  ctkHistogram.h
   ctkIconEnginePlugin.cpp
   ctkIconEnginePlugin.h
+  ctkIconEnginePlugin_qt4.h
+  ctkIconEnginePlugin_qt5.h
   ctkLanguageComboBox.cpp
   ctkLanguageComboBox.h
+  ctkLayoutFactory.cpp
+  ctkLayoutFactory.h
   ctkLayoutManager.cpp
   ctkLayoutManager.h
+  ctkLayoutViewFactory.cpp
+  ctkLayoutViewFactory.h
   ctkMaterialPropertyPreviewLabel.cpp
   ctkMaterialPropertyPreviewLabel.h
   ctkMaterialPropertyWidget.cpp
@@ -122,6 +144,9 @@ set(KIT_SRCS
   ctkPopupWidget_p.h
   ctkProxyStyle.cpp
   ctkProxyStyle.h
+  ctkPushButton.cpp
+  ctkPushButton.h
+  ctkPushButton_p.h
   ctkQImageView.cpp
   ctkQImageView.h
   ctkRangeSlider.cpp
@@ -141,8 +166,6 @@ set(KIT_SRCS
   ctkSettingsPanel.h
   ctkSignalMapper.cpp
   ctkSignalMapper.h
-  ctkSimpleLayoutManager.cpp
-  ctkSimpleLayoutManager.h
   ctkSizeGrip.cpp
   ctkSizeGrip.h
   ctkSliderWidget.cpp
@@ -156,6 +179,8 @@ set(KIT_SRCS
   ctkThumbnailListWidget_p.h
   ctkToolTipTrapper.cpp
   ctkToolTipTrapper.h
+  ctkTransferFunction.cpp
+  ctkTransferFunction.h
   ctkTransferFunctionBarsItem.cpp
   ctkTransferFunctionBarsItem.h
   ctkTransferFunctionControlPointsItem.cpp
@@ -164,6 +189,8 @@ set(KIT_SRCS
   ctkTransferFunctionGradientItem.h
   ctkTransferFunctionItem.cpp
   ctkTransferFunctionItem.h
+  ctkTransferFunctionRepresentation.cpp
+  ctkTransferFunctionRepresentation.h
   ctkTransferFunctionScene.cpp
   ctkTransferFunctionScene.h
   ctkTransferFunctionView.cpp
@@ -199,6 +226,7 @@ set(KIT_MOC_SRCS
   ctkButtonGroup.h
   ctkCheckableComboBox.h
   ctkCheckableHeaderView.h
+  ctkCheckableModelHelper.h
   ctkCheckablePushButton.h
   ctkCheckBox.h
   ctkCheckBoxPixmaps.h
@@ -211,12 +239,16 @@ set(KIT_MOC_SRCS
   ctkConsole.h
   ctkConsole_p.h
   ctkCoordinatesWidget.h
+  ctkCoordinatesWidget_p.h
   ctkCrosshairLabel.h
   ctkDateRangeWidget.h
   ctkDirectoryButton.h
   ctkDoubleRangeSlider.h
   ctkDoubleSlider.h
+  ctkDoubleSpinBox.h
+  ctkDoubleSpinBox_p.h
   ctkDynamicSpacer.h
+  ctkErrorLogModel.h
   ctkErrorLogWidget.h
   ctkErrorLogStatusMessageHandler.h
   ctkExpandButton.h
@@ -226,9 +258,11 @@ set(KIT_MOC_SRCS
   ctkFlatProxyModel.h
   ctkFlowLayout.h
   ctkFontButton.h
-  ctkIconEnginePlugin.h
+  ctkHistogram.h
   ctkLanguageComboBox.h
+  ctkLayoutFactory.h
   ctkLayoutManager.h
+  ctkLayoutViewFactory.h
   ctkMaterialPropertyPreviewLabel.h
   ctkMaterialPropertyWidget.h
   ctkMatrixWidget.h
@@ -242,6 +276,7 @@ set(KIT_MOC_SRCS
   ctkPopupWidget.h
   ctkPopupWidget_p.h
   ctkProxyStyle.h
+  ctkPushButton.h
   ctkQImageView.h
   ctkRangeSlider.h
   ctkRangeWidget.h
@@ -252,17 +287,18 @@ set(KIT_MOC_SRCS
   ctkSettingsDialog.h
   ctkSettingsPanel.h
   ctkSignalMapper.h
-  ctkSimpleLayoutManager.h
   ctkSizeGrip.h
   ctkSliderWidget.h
   ctkTestApplication.h
   ctkThumbnailLabel.h
   ctkThumbnailListWidget.h
   ctkToolTipTrapper.h
+  ctkTransferFunction.h
   ctkTransferFunctionBarsItem.h
   ctkTransferFunctionControlPointsItem.h
   ctkTransferFunctionGradientItem.h
   ctkTransferFunctionItem.h
+  ctkTransferFunctionRepresentation.h
   ctkTransferFunctionScene.h
   ctkTransferFunctionView.h
   ctkTreeComboBox.h
@@ -276,10 +312,18 @@ set(KIT_MOC_SRCS
   ctkWorkflowWidgetStep_p.h
   )
 
-QT4_GENERATE_MOCS(
+if(CTK_QT_VERSION VERSION_GREATER "4")
+  list(APPEND KIT_MOC_SRCS ctkIconEnginePlugin_qt5.h)
+else()
+  list(APPEND KIT_MOC_SRCS ctkIconEnginePlugin_qt4.h)
+endif()
+
+# Headers that should run through moc without adding
+# the generated cpp file to the source list
+set(KIT_GENERATE_MOC_SRCS
   ctkPathLineEdit.h
   ctkPathListWidget.h
-)
+  )
 
 # UI files
 set(KIT_UI_FORMS
@@ -306,6 +350,10 @@ set(KIT_resources
 # Target libraries - See CMake/ctkFunctionGetTargetLibraries.cmake
 # The following macro will read the target libraries from the file 'target_libraries.cmake'
 ctkFunctionGetTargetLibraries(KIT_target_libraries)
+
+if(CTK_QT_VERSION VERSION_GREATER "4")
+  list(APPEND KIT_target_libraries Qt5::Widgets Qt5::Xml Qt5::OpenGL)
+endif()
 
 # A player and a translator must be added for custom Qt widgets
 if(CTK_USE_QTTESTING)
@@ -370,6 +418,7 @@ if(CTK_USE_QTTESTING)
     ctkCheckableComboBoxEventTranslator.h
     ctkCheckableHeaderViewEventPlayer.h
     ctkCheckableHeaderViewEventTranslator.h
+    ctkCheckableModelHelper.h
     ctkConsoleEventPlayer.h
     ctkConsoleEventTranslator.h
     ctkDoubleRangeSliderEventPlayer.h
@@ -399,13 +448,14 @@ ctkMacroBuildLib(
   EXPORT_DIRECTIVE ${KIT_export_directive}
   SRCS ${KIT_SRCS}
   MOC_SRCS ${KIT_MOC_SRCS}
+  GENERATE_MOC_SRCS ${KIT_GENERATE_MOC_SRCS}
   UI_FORMS ${KIT_UI_FORMS}
   TARGET_LIBRARIES ${KIT_target_libraries}
   RESOURCES ${KIT_resources}
   LIBRARY_TYPE ${CTK_LIBRARY_MODE}
   )
 
-if(CTK_WRAP_PYTHONQT_FULL OR CTK_WRAP_PYTHONQT_LIGHT)
+if(CTK_WRAP_PYTHONQT_LIGHT)
   ctkMacroBuildLibWrapper(
     TARGET ${PROJECT_NAME}
     SRCS ${KIT_SRCS}

@@ -72,6 +72,8 @@ void ctkVTKTextPropertyWidgetPrivate::init()
                    q, SLOT(setItalic(bool)));
   QObject::connect(this->ShadowCheckBox, SIGNAL(toggled(bool)),
                    q, SLOT(setShadow(bool)));
+  QObject::connect(this->SizeSlider, SIGNAL(valueChanged(double)),
+                   q, SLOT(setSize(double)));
 }
 
 //-----------------------------------------------------------------------------
@@ -123,6 +125,8 @@ void ctkVTKTextPropertyWidget::updateFromTextProperty()
     d->BoldCheckBox->setChecked(false);
     d->ItalicCheckBox->setChecked(false);
     d->ShadowCheckBox->setChecked(false);
+    // Default vtkTextProperty font size is 12
+    d->SizeSlider->setValue(12);
     return;
     }
 
@@ -135,6 +139,7 @@ void ctkVTKTextPropertyWidget::updateFromTextProperty()
   d->BoldCheckBox->setChecked(d->TextProperty->GetBold() != 0);
   d->ItalicCheckBox->setChecked(d->TextProperty->GetItalic() != 0);
   d->ShadowCheckBox->setChecked(d->TextProperty->GetShadow() != 0);
+  d->SizeSlider->setValue(d->TextProperty->GetFontSize());
 }
 
 //-----------------------------------------------------------------------------
@@ -198,6 +203,8 @@ void ctkVTKTextPropertyWidget::setColor(const QColor& color)
     return;
     }
   d->TextProperty->SetColor(color.redF(), color.greenF(), color.blueF());
+
+  emit colorChanged(color);
 }
 
 //-----------------------------------------------------------------------------
@@ -216,6 +223,8 @@ void ctkVTKTextPropertyWidget::setOpacity(double opacity)
     return;
     }
   d->TextProperty->SetOpacity(opacity);
+
+  emit opacityChanged(opacity);
 }
 
 //-----------------------------------------------------------------------------
@@ -234,6 +243,8 @@ void ctkVTKTextPropertyWidget::setFont(const QString& font)
     return;
     }
   d->TextProperty->SetFontFamilyAsString(font.toStdString().data());
+  
+  emit fontFamilyChanged(font);
 }
 
 //-----------------------------------------------------------------------------
@@ -252,6 +263,8 @@ void ctkVTKTextPropertyWidget::setBold(bool enable)
     return;
     }
   d->TextProperty->SetBold(enable);
+  
+  emit boldChanged(enable);
 }
 
 //-----------------------------------------------------------------------------
@@ -270,6 +283,8 @@ void ctkVTKTextPropertyWidget::setItalic(bool enable)
     return;
     }
   d->TextProperty->SetItalic(enable);
+  
+  emit italicChanged(enable);
 }
 
 //-----------------------------------------------------------------------------
@@ -288,4 +303,40 @@ void ctkVTKTextPropertyWidget::setShadow(bool enable)
     return;
     }
   d->TextProperty->SetShadow(enable);
+  
+  emit shadowChanged(enable);
+}
+
+//-----------------------------------------------------------------------------
+double ctkVTKTextPropertyWidget::size()const
+{
+  Q_D(const ctkVTKTextPropertyWidget);
+  return d->SizeSlider->value();
+}
+
+//-----------------------------------------------------------------------------
+void ctkVTKTextPropertyWidget::setSize(double size)
+{
+  Q_D(const ctkVTKTextPropertyWidget);
+  if (d->TextProperty.GetPointer() == 0)
+    {
+    return;
+    }
+  d->TextProperty->SetFontSize(size);
+
+  emit sizeChanged(size);
+}
+
+//-----------------------------------------------------------------------------
+void ctkVTKTextPropertyWidget::setSizeVisible(bool visible)
+{
+  Q_D(ctkVTKTextPropertyWidget);
+  d->SizeSlider->setVisible(visible);
+}
+
+//-----------------------------------------------------------------------------
+bool ctkVTKTextPropertyWidget::isSizeVisible()const
+{
+  Q_D(const ctkVTKTextPropertyWidget);
+  return d->SizeSlider->isVisibleTo(const_cast<ctkVTKTextPropertyWidget*>(this));
 }

@@ -44,6 +44,9 @@ private slots:
   void testChangeProperty_data();
 
   void testEmptyQStringList();
+
+  void testResetRestoreReloadSettings();
+  void testResetRestoreReloadSettings_data();
 };
 
 //-----------------------------------------------------------------------------
@@ -216,6 +219,28 @@ void ctkSettingsPanelTester::testChangeProperty_data()
   QTest::newRow("label RequireRestart unchanged panel") << QString("label") << ctkSettingsPanel::SettingOptions(ctkSettingsPanel::OptionRequireRestart) << 1 << false << true << 0 << QStringList();
 }
 
+namespace
+{
+//-----------------------------------------------------------------------------
+class ctkSettingsPanelForTest : public ctkSettingsPanel
+{
+public:
+  QVariant myDefaultPropertyValue(const QString& key) const
+    {
+    return this->defaultPropertyValue(key);
+    }
+  QVariant myPreviousPropertyValue(const QString& key) const
+    {
+    return this->previousPropertyValue(key);
+    }
+  QVariant myPropertyValue(const QString& key) const
+    {
+    return this->propertyValue(key);
+    }
+};
+
+} // end of anonymous namespace
+
 //-----------------------------------------------------------------------------
 void ctkSettingsPanelTester::testEmptyQStringList()
 {
@@ -227,12 +252,167 @@ void ctkSettingsPanelTester::testEmptyQStringList()
   }
 
   // Regression: Reading empty QStringList property from settings should be handled properly
+  // See issue #646
 
-  ctkSettingsPanel settingsPanel;
+  ctkSettingsPanelForTest settingsPanel;
   ctkSettingsPanelTest2Helper * list = new ctkSettingsPanelTest2Helper(&settingsPanel);
   settingsPanel.registerProperty("list", list, "list", SIGNAL(listChanged()));
   QSettings settings2(QSettings::IniFormat, QSettings::UserScope, "Common ToolKit", "CTK");
   settingsPanel.setSettings(&settings2);
+
+  QVariant listVal = settings2.value("list");
+  QCOMPARE(listVal.isValid(), false); // See issue #646
+  QCOMPARE(listVal, QVariant()); // See issue #646
+  QCOMPARE(listVal.toStringList(), QStringList());
+  QCOMPARE(settingsPanel.myPreviousPropertyValue("list").toStringList(), QStringList());
+  QCOMPARE(settingsPanel.myDefaultPropertyValue("list").toStringList(), QStringList());
+  QCOMPARE(settingsPanel.myPropertyValue("list").toStringList(), QStringList());
+}
+
+//-----------------------------------------------------------------------------
+void ctkSettingsPanelTester::testResetRestoreReloadSettings()
+{
+  QSettings settings(QSettings::IniFormat, QSettings::UserScope, "Common ToolKit", "CTK");
+  // Clear settings
+  settings.clear();
+  settings.sync();
+
+  int settingsValue = 1;
+  int initValue = 2;
+  int newValue = 3;
+
+  QFETCH(bool, setSettingsValue);
+  if (setSettingsValue)
+    {
+    settings.setValue("key 1", settingsValue);
+    }
+
+  QSpinBox spinBox;
+  spinBox.setValue(initValue);
+
+  ctkSettingsPanel settingsPanel;
+  settingsPanel.setSettings(&settings);
+  settingsPanel.registerProperty("key 1", &spinBox, "value",
+                                 SIGNAL(valueChanged(int)));
+
+  QFETCH(bool, setSpinBoxValue);
+  if (setSpinBoxValue)
+    {
+    spinBox.setValue(newValue);
+    }
+
+  QFETCH(bool, applySettings);
+  if (applySettings)
+    {
+    settingsPanel.applySettings();
+    }
+
+  QFETCH(bool, resetSettings);
+  if (resetSettings)
+    {
+    settingsPanel.resetSettings();
+    }
+
+  QFETCH(bool, restoreDefaultSettings);
+  if (restoreDefaultSettings)
+    {
+    settingsPanel.restoreDefaultSettings();
+    }
+
+  QFETCH(bool, reloadSettings);
+  if (reloadSettings)
+    {
+    settingsPanel.reloadSettings();
+    }
+
+  QFETCH(int, finalValue);
+  QCOMPARE(settings.value("key 1").toInt(), finalValue);
+}
+
+//-----------------------------------------------------------------------------
+void ctkSettingsPanelTester::testResetRestoreReloadSettings_data()
+{
+  QTest::addColumn<bool>("setSettingsValue");
+  QTest::addColumn<bool>("setSpinBoxValue");
+  QTest::addColumn<bool>("applySettings");
+  QTest::addColumn<bool>("resetSettings");
+  QTest::addColumn<bool>("restoreDefaultSettings");
+  QTest::addColumn<bool>("reloadSettings");
+  QTest::addColumn<int>("finalValue");
+
+  int settingsValue = 1;
+  int initValue = 2;
+  int newValue = 3;
+
+  //   settings spinbox apply    reset   restore  reload  final
+  QTest::newRow("set value")
+    << false << true << false << false << false << false << newValue;
+  QTest::newRow("reload")
+    << false << true << false << false << false << true << newValue;
+  QTest::newRow("restore")
+    << false << true << false << false << true << false << initValue;
+  QTest::newRow("restore and reload")
+    << false << true << false << false << true << true << initValue;
+  QTest::newRow("reset")
+    << false << true << false << true << false << false << initValue;
+  QTest::newRow("reset and reload")
+    << false << true << false << true << false << true << initValue;
+  QTest::newRow("reset and restore")
+    << false << true << false << true << true << false << initValue;
+  QTest::newRow("reset, restore and reload")
+    << false << true << false << true << true << true << initValue;
+  QTest::newRow("apply")
+    << false << true << true << false << false << false << newValue;
+  QTest::newRow("apply and reload")
+    << false << true << true << false << false << true << newValue;
+  QTest::newRow("apply and restore")
+    << false << true << true << false << true << false << initValue;
+  QTest::newRow("apply, restore and reload")
+    << false << true << true << false << true << true << initValue;
+  QTest::newRow("apply and reset")
+    << false << true << true << true << false << false << newValue;
+  QTest::newRow("apply, reset and reload")
+    << false << true << true << true << false << true << newValue;
+  QTest::newRow("apply, reset and restore")
+    << false << true << true << true << true << false << initValue;
+  QTest::newRow("apply, reset, restore and reload")
+    << false << true << true << true << true << true << initValue;
+
+  // with existing settings
+  //   settings spinbox apply    reset   restore  reload  final
+  QTest::newRow("set value with settings")
+    << true << true << false << false << false << false << newValue;
+  QTest::newRow("reload with settings")
+    << true << true << false << false << false << true << newValue;
+  QTest::newRow("restore with settings")
+    << true << true << false << false << true << false << initValue;
+  QTest::newRow("restore and reload with settings")
+    << true << true << false << false << true << true << initValue;
+  QTest::newRow("reset with settings")
+    << true << true << false << true << false << false << settingsValue;
+  QTest::newRow("reset and reload with settings")
+    << true << true << false << true << false << true << settingsValue;
+  QTest::newRow("reset and restore with settings")
+    << true << true << false << true << true << false << initValue;
+  QTest::newRow("reset, restore and reload with settings")
+    << true << true << false << true << true << true << initValue;
+  QTest::newRow("apply with settings")
+    << true << true << true << false << false << false << newValue;
+  QTest::newRow("apply and reload with settings")
+    << true << true << true << false << false << true << newValue;
+  QTest::newRow("apply and restore with settings")
+    << true << true << true << false << true << false << initValue;
+  QTest::newRow("apply, restore and reload with settings")
+    << true << true << true << false << true << true << initValue;
+  QTest::newRow("apply and reset with settings")
+    << true << true << true << true << false << false << newValue;
+  QTest::newRow("apply, reset and reload with settings")
+    << true << true << true << true << false << true << newValue;
+  QTest::newRow("apply, reset and restore with settings")
+    << true << true << true << true << true << false << initValue;
+  QTest::newRow("apply, reset, restore and reload with settings")
+    << true << true << true << true << true << true << initValue;
+
 }
 
 // ----------------------------------------------------------------------------

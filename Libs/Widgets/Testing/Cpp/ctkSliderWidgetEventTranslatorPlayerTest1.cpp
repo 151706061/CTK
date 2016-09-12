@@ -69,15 +69,8 @@ int ctkSliderWidgetEventTranslatorPlayerTest1(int argc, char * argv [] )
                         xmlDirectory + "ctkSliderWidgetEventTranslatorPlayerTest1.xml",
                         &checkFinalWidgetState);
 
-  // Test case 2
-  ctkSliderWidget* widget2 = new ctkSliderWidget();
-  widget2->setObjectName("SliderWidgetTest2");
-  etpWidget.addTestCase(widget2,
-                        xmlDirectory + "ctkSliderWidgetEventTranslatorPlayerTest2.xml",
-                        &checkFinalWidgetState);
-
   // ------------------------
-  if (!app.arguments().contains("-I"))
+  if (argc < 2 || QString(argv[1]) != "-I")
     {
     QTimer::singleShot(0, &etpWidget, SLOT(play()));
     }

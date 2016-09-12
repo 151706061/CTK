@@ -60,7 +60,7 @@ public:
 ctkSearchBoxPrivate::ctkSearchBoxPrivate(ctkSearchBox &object)
   : q_ptr(&object)
 {
-  this->clearIcon = QIcon(":Icons/clear.svg");
+  this->clearIcon = QIcon(":Icons/clear2.svg");
   this->searchIcon = QIcon(":Icons/search.svg");
   this->showSearchIcon = false;
   this->alwaysShowClearIcon = false;
@@ -298,6 +298,7 @@ void ctkSearchBox::mousePressEvent(QMouseEvent *e)
   if(d->clearRect().contains(e->pos()))
     {
     this->clear();
+    emit this->textEdited(this->text());
     return;
     }
 

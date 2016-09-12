@@ -29,15 +29,23 @@
 #include "ctkCmdLineModuleProcessTask.h"
 #include "ctkCmdLineModuleReference.h"
 #include "ctkCmdLineModuleRunException.h"
+#include "ctkCmdLineModuleTimeoutException.h"
 
 #include "ctkUtils.h"
-
+#include <iostream>
 #include <QProcess>
 #include <QUrl>
 
 //----------------------------------------------------------------------------
 struct ctkCmdLineModuleBackendLocalProcessPrivate
 {
+
+  int m_TimeoutForXMLRetrieval;
+
+  ctkCmdLineModuleBackendLocalProcessPrivate()
+    : m_TimeoutForXMLRetrieval(0) // use the value from the module manager
+  {
+  }
 
   QString normalizeFlag(const QString& flag) const
   {
@@ -87,24 +95,27 @@ struct ctkCmdLineModuleBackendLocalProcessPrivate
           }
           else
           {
-            QString arg = valuesIter.value().toString();
-            if (arg.isEmpty())
-            {
-              arg = parameter.defaultValue();
-            }
-            if (!arg.isEmpty())
-            {
-              args.push_back(valuesIter.value().toString());
-            }
+            args.push_back(valuesIter.value().toString());
           }
 
-          if (args.length() > 0) // don't write the argFlag if there was no argument, and no default.
+          if (args.length() > 0)
           {
             foreach(QString arg, args)
             {
-              cmdLineArgs << argFlag << arg;
-            }
-          }
+              if (parameter.tag() == "string")
+              {
+                cmdLineArgs << argFlag << arg;
+              }
+              else
+              {
+                QString trimmedArg = arg.trimmed();
+                if (trimmedArg.length() != 0) // If not string, and no arg, we don't output. We need this policy for integers, doubles, etc.
+                {
+                  cmdLineArgs << argFlag << trimmedArg;
+                }
+              }
+            } // end foreach
+          } // end if (args.length() > 0)
         }
       }
     }
@@ -162,16 +173,23 @@ qint64 ctkCmdLineModuleBackendLocalProcess::timeStamp(const QUrl &location) cons
 }
 
 //----------------------------------------------------------------------------
-QByteArray ctkCmdLineModuleBackendLocalProcess::rawXmlDescription(const QUrl &location)
+QByteArray ctkCmdLineModuleBackendLocalProcess::rawXmlDescription(const QUrl &location, int timeout)
 {
   QProcess process;
   process.setReadChannel(QProcess::StandardOutput);
   process.start(location.toLocalFile(), QStringList("--xml"));
 
-  if (!process.waitForFinished() || process.exitStatus() == QProcess::CrashExit ||
-      process.error() != QProcess::UnknownError)
+  if (!process.waitForFinished(timeout))
   {
-    throw ctkCmdLineModuleRunException(location, process.exitCode(), process.errorString());
+    if (process.error() == QProcess::Timedout)
+    {
+      throw ctkCmdLineModuleTimeoutException(location, process.errorString());
+    }
+    else if (process.exitStatus() == QProcess::CrashExit ||
+             process.error() != QProcess::UnknownError)
+    {
+      throw ctkCmdLineModuleRunException(location, process.exitCode(), process.errorString());
+    }
   }
 
   process.waitForReadyRead();
@@ -188,4 +206,16 @@ ctkCmdLineModuleFuture ctkCmdLineModuleBackendLocalProcess::run(ctkCmdLineModule
   ctkCmdLineModuleProcessTask* moduleProcess =
       new ctkCmdLineModuleProcessTask(frontend->location().toLocalFile(), args);
   return moduleProcess->start();
+}
+
+//----------------------------------------------------------------------------
+void ctkCmdLineModuleBackendLocalProcess::setTimeOutForXMLRetrieval(int timeOut)
+{
+  d->m_TimeoutForXMLRetrieval = timeOut;
+}
+
+//----------------------------------------------------------------------------
+int ctkCmdLineModuleBackendLocalProcess::timeOutForXMLRetrieval() const
+{
+  return d->m_TimeoutForXMLRetrieval;
 }

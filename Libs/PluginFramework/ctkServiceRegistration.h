@@ -49,8 +49,6 @@ class ctkServiceRegistrationPrivate;
  */
 class CTK_PLUGINFW_EXPORT ctkServiceRegistration {
 
-  Q_DECLARE_PRIVATE(ctkServiceRegistration)
-
 public:
 
   /**
@@ -144,7 +142,7 @@ public:
    * @see ctkPluginContext#ungetService
    * @see ctkServiceFactory#ungetService
    */
-  virtual void unregister();
+  void unregister();
 
   bool operator<(const ctkServiceRegistration& o) const;
 
@@ -167,6 +165,8 @@ protected:
 
   ctkServiceRegistrationPrivate* d_ptr;
 
+private:
+  Q_DECLARE_PRIVATE(ctkServiceRegistration)
 };
 
 /**

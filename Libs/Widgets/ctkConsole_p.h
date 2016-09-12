@@ -30,6 +30,8 @@
 #include "ctkConsole.h"
 #include "ctkWidgetsExport.h"
 
+class QPushButton;
+
 /// \ingroup Widgets
 class CTK_WIDGETS_EXPORT ctkConsolePrivate : public QTextEdit
 {
@@ -43,6 +45,8 @@ public:
   typedef QTextEdit Superclass;
 
   void init();
+
+  static bool isMoveLeftWithinLine(QKeyEvent* e, QTextCursor::MoveOperation &moveOperation, QTextCursor::MoveMode &moveMode);
 
   virtual void keyPressEvent(QKeyEvent* e);
 
@@ -121,6 +125,21 @@ public Q_SLOTS:
   /// Update the value of ScrollbarAtBottom given the current position of the scollbar
   void onScrollBarValueChanged(int value);
 
+  /// Ensure the interactive line is visible (even when it is split on 2 lines)
+  /// \sa onScrollBarValueChanged()
+  void onTextChanged();
+
+protected:
+  /// Return true if the cursor position is in the history area
+  /// false if it is after the InteractivePosition.
+  bool isCursorInHistoryArea()const;
+
+  /// Reimplemented to make sure there is no text added into the
+  /// history logs.
+  virtual void insertFromMimeData(const QMimeData* source);
+
+  /// Paste text at the current text cursor position.
+  void pasteText(const QString& text);
 public:
 
   /// A custom completer
@@ -168,6 +187,13 @@ public:
   bool ScrollbarAtBottom;
 
   QPointer<QEventLoop> InputEventLoop;
+
+  QList<QKeySequence> CompleterShortcuts;
+
+  ctkConsole::RunFileOptions RunFileOptions;
+
+  QPushButton* RunFileButton;
+  QAction* RunFileAction;
 };
 
 

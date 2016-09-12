@@ -22,8 +22,9 @@
 #include "ctkCmdLineModuleConcurrentHelpers.h"
 
 #include "ctkCmdLineModuleManager.h"
-#include "ctkException.h"
+#include "ctkCmdLineModuleRunException.h"
 
+#include <qtconcurrentexception.h>
 #include <QUrl>
 #include <QDebug>
 
@@ -34,34 +35,49 @@ ctkCmdLineModuleConcurrentRegister::ctkCmdLineModuleConcurrentRegister(ctkCmdLin
 {}
 
 //----------------------------------------------------------------------------
-ctkCmdLineModuleReference ctkCmdLineModuleConcurrentRegister::operator()(const QString& moduleLocation)
+ctkCmdLineModuleReferenceResult ctkCmdLineModuleConcurrentRegister::operator()(const QString& moduleLocation)
 {
   return this->operator ()(QUrl::fromLocalFile(moduleLocation));
 }
 
 //----------------------------------------------------------------------------
-ctkCmdLineModuleReference ctkCmdLineModuleConcurrentRegister::operator()(const QUrl& moduleUrl)
+ctkCmdLineModuleReferenceResult ctkCmdLineModuleConcurrentRegister::operator()(const QUrl& moduleUrl)
 {
   try
   {
-    return this->ModuleManager->registerModule(moduleUrl);
+    ctkCmdLineModuleReference reference = this->ModuleManager->registerModule(moduleUrl);
+    return ctkCmdLineModuleReferenceResult(reference);
   }
   catch (const ctkException& e)
   {
     if (this->Debug)
     {
-      qDebug() << e;
+      qDebug() << e.message();
     }
-    return ctkCmdLineModuleReference();
+    return ctkCmdLineModuleReferenceResult(moduleUrl, e.message());
   }
-  catch (...)
+#if (QT_VERSION >= QT_VERSION_CHECK(5,0,0))
+  catch (const QException& e)
+#else
+  catch (const QtConcurrent::Exception& e)
+#endif
   {
     if (this->Debug)
     {
-      qDebug() << "Registering module" << moduleUrl << "failed with an unknown exception.";
+      qDebug() << e.what();
     }
-    return ctkCmdLineModuleReference();
+    return ctkCmdLineModuleReferenceResult(moduleUrl, e.what());
   }
+  catch (...)
+  {
+    QString errorMessage = QObject::tr("Module %1 failed with an unknown exception.").arg(moduleUrl.toString());
+    if (this->Debug)
+    {
+      qDebug() << errorMessage;
+    }
+    return ctkCmdLineModuleReferenceResult(moduleUrl, errorMessage);
+  }
+  return ctkCmdLineModuleReferenceResult(moduleUrl);
 }
 
 //----------------------------------------------------------------------------

@@ -25,6 +25,10 @@
 #include <QObject>
 #include <QList>
 #include <QStringList>
+#include <QVariant>
+
+// PythonQt includes
+#include <PythonQtPythonInclude.h> // For PyObject
 
 // CTK includes
 #include "ctkScriptingPythonCoreExport.h"
@@ -87,14 +91,14 @@ public:
 
   /// Execute a python of python code (can be multiple lines separated with newline)
   /// and return the result as a QVariant.
-  QVariant executeString(const QString& code, ExecuteStringMode mode = FileInput);
+  Q_INVOKABLE QVariant executeString(const QString& code, ExecuteStringMode mode = FileInput);
 
   /// Gets the value of the variable looking in the __main__ module.
   /// If the variable is not found returns a default initialized QVariant.
   QVariant getVariable(const QString& varName);
 
   /// Execute a python script with the given filename.
-  void executeFile(const QString& filename);
+  Q_INVOKABLE void executeFile(const QString& filename);
 
   /// Set function that is initialized after preInitialization and before executeInitializationScripts
   /// \sa preInitialization executeInitializationScripts
@@ -108,16 +112,23 @@ public:
                                const QString& module = QLatin1String("__main__"),
                                bool appendParenthesis = false) const;
 
+  /// Given a string of the form "<modulename1>[.<modulenameN>...]" containing modules, return the final module as a PyObject*
+  static PyObject* pythonModule(const QString &module);
+
+  /// Given a string of the form "<modulename1>[.<modulenameN>...].correspondingObject, return the final object as a PyObject*
+  /// \sa pythonModule
+  static PyObject* pythonObject(const QString& variableNameAndFunction);
+
   /// Returns True if python is initialized
   /// \sa pythonInitialized
   bool isPythonInitialized()const;
 
   /// Returns True if a python error occured.
-  /// \sa PythonQt::errorOccured()
+  /// \sa PythonQt::hadError()
   bool pythonErrorOccured()const;
 
   /// Reset error flag
-  /// \sa PythonQt::resetErrorFlag()
+  /// \sa PythonQt::clearError()
   void resetErrorFlag();
 
 Q_SIGNALS:

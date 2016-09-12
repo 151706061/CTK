@@ -28,7 +28,10 @@
 
 // PythonQT includes
 #include <PythonQt.h>
-#include <PythonQt_QtBindings.h>
+
+#if QT_VERSION < QT_VERSION_CHECK(5, 0, 0)
+  #include <PythonQt_QtBindings.h>
+#endif
 
 // STD includes
 #include <csignal>
@@ -152,7 +155,9 @@ void ctkAbstractPythonManager::initPythonQt(int flags)
   this->connect(PythonQt::self(), SIGNAL(pythonStdErr(QString)),
                 SLOT(printStderr(QString)));
 
+#if QT_VERSION < QT_VERSION_CHECK(5, 0, 0)
   PythonQt_init_QtBindings();
+#endif
 
   QStringList initCode;
 
@@ -186,13 +191,23 @@ bool ctkAbstractPythonManager::isPythonInitialized()const
 //-----------------------------------------------------------------------------
 bool ctkAbstractPythonManager::pythonErrorOccured()const
 {
-  return PythonQt::self()->errorOccured();
+  if (!PythonQt::self())
+    {
+    qWarning() << Q_FUNC_INFO << " failed: PythonQt is not initialized";
+    return false;
+    }
+  return PythonQt::self()->hadError();
 }
 
 //-----------------------------------------------------------------------------
 void ctkAbstractPythonManager::resetErrorFlag()
 {
-  PythonQt::self()->resetErrorFlag();
+  if (!PythonQt::self())
+    {
+    qWarning() << Q_FUNC_INFO << " failed: PythonQt is not initialized";
+    return;
+    }
+  PythonQt::self()->clearError();
 }
 
 //-----------------------------------------------------------------------------
@@ -214,32 +229,55 @@ void ctkAbstractPythonManager::executeInitializationScripts()
 //-----------------------------------------------------------------------------
 void ctkAbstractPythonManager::registerPythonQtDecorator(QObject* decorator)
 {
+  if (!PythonQt::self())
+    {
+    qWarning() << Q_FUNC_INFO << " failed: PythonQt is not initialized";
+    return;
+    }
   PythonQt::self()->addDecorators(decorator);
 }
 
 //-----------------------------------------------------------------------------
 void ctkAbstractPythonManager::registerClassForPythonQt(const QMetaObject* metaobject)
 {
+  if (!PythonQt::self())
+    {
+    qWarning() << Q_FUNC_INFO << " failed: PythonQt is not initialized";
+    return;
+    }
   PythonQt::self()->registerClass(metaobject);
 }
 
 //-----------------------------------------------------------------------------
 void ctkAbstractPythonManager::registerCPPClassForPythonQt(const char* name)
 {
+  if (!PythonQt::self())
+    {
+    qWarning() << Q_FUNC_INFO << " failed: PythonQt is not initialized";
+    return;
+    }
   PythonQt::self()->registerCPPClass(name);
 }
 
 //-----------------------------------------------------------------------------
 bool ctkAbstractPythonManager::systemExitExceptionHandlerEnabled()const
 {
-  Q_D(const ctkAbstractPythonManager);
+  if (!PythonQt::self())
+    {
+    qWarning() << Q_FUNC_INFO << " failed: PythonQt is not initialized";
+    return false;
+    }
   return PythonQt::self()->systemExitExceptionHandlerEnabled();
 }
 
 //-----------------------------------------------------------------------------
 void ctkAbstractPythonManager::setSystemExitExceptionHandlerEnabled(bool value)
 {
-  Q_D(ctkAbstractPythonManager);
+  if (!PythonQt::self())
+    {
+    qWarning() << Q_FUNC_INFO << " failed: PythonQt is not initialized";
+    return;
+    }
   PythonQt::self()->setSystemExitExceptionHandlerEnabled(value);
 }
 
@@ -309,12 +347,13 @@ QStringList ctkAbstractPythonManager::pythonAttributes(const QString& pythonVari
   PyObject* dict = PyImport_GetModuleDict();
 
   // Split module by '.' and retrieve the object associated if the last module
-  PyObject* object = 0;
+  QString precedingModule = module;
+  PyObject* object = ctkAbstractPythonManager::pythonModule(precedingModule);
   PyObject* prevObject = 0;
   QStringList moduleList = module.split(".", QString::SkipEmptyParts);
   foreach(const QString& module, moduleList)
     {
-    object = PyDict_GetItemString(dict, module.toAscii().data());
+    object = PyDict_GetItemString(dict, module.toLatin1().data());
     if (prevObject) { Py_DECREF(prevObject); }
     if (!object)
       {
@@ -329,7 +368,7 @@ QStringList ctkAbstractPythonManager::pythonAttributes(const QString& pythonVari
     return QStringList();
     }
 
-//  PyObject* object = PyDict_GetItemString(dict, module.toAscii().data());
+//  PyObject* object = PyDict_GetItemString(dict, module.toLatin1().data());
 //  if (!object)
 //    {
 //    return QStringList();
@@ -391,6 +430,105 @@ QStringList ctkAbstractPythonManager::pythonAttributes(const QString& pythonVari
 }
 
 //-----------------------------------------------------------------------------
+PyObject* ctkAbstractPythonManager::pythonObject(const QString& variableNameAndFunction)
+{
+  QStringList variableNameAndFunctionList = variableNameAndFunction.split(".");
+  QString compareFunction = variableNameAndFunctionList.last();
+  variableNameAndFunctionList.removeLast();
+  QString pythonVariableName = variableNameAndFunctionList.last();
+  variableNameAndFunctionList.removeLast();
+  QString precedingModules = variableNameAndFunctionList.join(".");
+
+  Q_ASSERT(PyThreadState_GET()->interp);
+  PyObject* object = ctkAbstractPythonManager::pythonModule(precedingModules);
+  if (!object)
+    {
+    return NULL;
+    }
+  if (!pythonVariableName.isEmpty())
+    {
+    QStringList tmpNames = pythonVariableName.split('.');
+    for (int i = 0; i < tmpNames.size() && object; ++i)
+      {
+      QByteArray tmpName = tmpNames.at(i).toLatin1();
+      PyObject* prevObj = object;
+      if (PyDict_Check(object))
+        {
+        object = PyDict_GetItemString(object, tmpName.data());
+        Py_XINCREF(object);
+        }
+      else
+        {
+        object = PyObject_GetAttrString(object, tmpName.data());
+        }
+        Py_DECREF(prevObj);
+      }
+    }
+  PyObject* finalPythonObject = NULL;
+  if (object)
+    {
+    PyObject* keys = PyObject_Dir(object);
+    if (keys)
+      {
+      PyObject* key;
+      PyObject* value;
+      int nKeys = PyList_Size(keys);
+      for (int i = 0; i < nKeys; ++i)
+        {
+        key = PyList_GetItem(keys, i);
+        value = PyObject_GetAttr(object, key);
+        if (!value)
+          {
+          continue;
+          }
+        QString keyStr = PyString_AsString(key);
+        if (keyStr.operator ==(compareFunction))
+          {
+          finalPythonObject = value;
+          break;
+          }
+        Py_DECREF(value);
+        }
+      Py_DECREF(keys);
+      }
+    Py_DECREF(object);
+    }
+  return finalPythonObject;
+}
+
+//-----------------------------------------------------------------------------
+PyObject* ctkAbstractPythonManager::pythonModule(const QString& module)
+{
+  PyObject* dict = PyImport_GetModuleDict();
+  PyObject* object = 0;
+  PyObject* prevObject = 0;
+  QStringList moduleList = module.split(".", QString::KeepEmptyParts);
+  if (!dict)
+    {
+    return object;
+    }
+  foreach(const QString& module, moduleList)
+    {
+    object = PyDict_GetItemString(dict, module.toAscii().data());
+    if (prevObject)
+      {
+      Py_DECREF(prevObject);
+      }
+    if (!object)
+      {
+      break;
+      }
+    Py_INCREF(object); // This is required, otherwise python destroys object.
+    if (PyObject_HasAttrString(object, "__dict__"))
+      {
+      dict = PyObject_GetAttrString(object, "__dict__");
+      }\
+    prevObject = object;
+    }
+  return object;
+}
+
+//-----------------------------------------------------------------------------
 void ctkAbstractPythonManager::addObjectToPythonMain(const QString& name, QObject* obj)
 {
   PythonQtObjectPtr main = ctkAbstractPythonManager::mainContext();
@@ -403,6 +541,11 @@ void ctkAbstractPythonManager::addObjectToPythonMain(const QString& name, QObjec
 //-----------------------------------------------------------------------------
 void ctkAbstractPythonManager::addWrapperFactory(PythonQtForeignWrapperFactory* factory)
 {
+  if (!PythonQt::self())
+    {
+    qWarning() << Q_FUNC_INFO << " failed: PythonQt is not initialized";
+    return;
+    }
   PythonQt::self()->addWrapperFactory(factory);
 }
 
@@ -426,5 +569,5 @@ void ctkAbstractPythonManager::printStdout(const QString& text)
 //-----------------------------------------------------------------------------
 void ctkAbstractPythonManager::printStderr(const QString& text)
 {
-  std::cout << qPrintable(text);
+  std::cerr << qPrintable(text);
 }

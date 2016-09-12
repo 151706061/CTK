@@ -6,37 +6,20 @@ project(CTKDICOMCore)
 
 set(KIT_export_directive "CTK_DICOM_CORE_EXPORT")
 
-
-# determine the DCMTK version we're using
-if(EXISTS ${DCMTK_config_INCLUDE_DIR}/cfunix.h)
-  set(_DCMTK_CONFIG_HEADER ${DCMTK_config_INCLUDE_DIR}/cfunix.h)
-elseif(EXISTS ${DCMTK_config_INCLUDE_DIR}/osconfig.h)
-  set(_DCMTK_CONFIG_HEADER ${DCMTK_config_INCLUDE_DIR}/osconfig.h)
-else()
-  message(SEND_ERROR "DCMTK version cannot be determined!")
-endif()
-
-
-file(READ ${_DCMTK_CONFIG_HEADER} _DCMTK_CONFIG)
-# simple check, we do not expect anything else
-if(_DCMTK_CONFIG MATCHES "PACKAGE_VERSION_NUMBER 360")
-  set(DCMTK_VERSION_IS_360 1)
-  message(STATUS "Detected DCMTK 3.6.0, will include backported SCU")
-endif()
-
 # Source files
 set(KIT_SRCS
   ctkDICOMAbstractThumbnailGenerator.cpp
   ctkDICOMAbstractThumbnailGenerator.h
   ctkDICOMDatabase.cpp
   ctkDICOMDatabase.h
-  ctkDICOMDataset.cpp
-  ctkDICOMDataset.h
+  ctkDICOMItem.h
   ctkDICOMFilterProxyModel.cpp
   ctkDICOMFilterProxyModel.h
   ctkDICOMIndexer.cpp
   ctkDICOMIndexer.h
   ctkDICOMIndexer_p.h
+  ctkDICOMItem.cpp
+  ctkDICOMItem.h
   ctkDICOMModel.cpp
   ctkDICOMModel.h
   ctkDICOMPersonName.cpp
@@ -47,12 +30,9 @@ set(KIT_SRCS
   ctkDICOMRetrieve.h
   ctkDICOMTester.cpp
   ctkDICOMTester.h
+  ctkDICOMUtil.cpp
+  ctkDICOMUtil.h
 )
-
-if(DCMTK_VERSION_IS_360)
-  list(APPEND KIT_SRCS ctkDcmSCU.cc)
-endif(DCMTK_VERSION_IS_360)
-
 
 # Abstract class should not be wrapped !
 set_source_files_properties(
@@ -86,6 +66,10 @@ set(KIT_resources
 # The following macro will read the target libraries from the file 'target_libraries.cmake'
 ctkFunctionGetTargetLibraries(KIT_target_libraries)
 
+if(CTK_QT_VERSION VERSION_GREATER "4")
+  list(APPEND KIT_target_libraries Qt5::Sql)
+endif()
+
 # create a dcm query/retrieve service config file that points to the build dir
 set (DCMQRSCP_STORE_DIR ${CMAKE_CURRENT_BINARY_DIR}/Testing)
 configure_file( Resources/dcmqrscp.cfg.in dcmqrscp.cfg )
@@ -102,7 +86,16 @@ ctkMacroBuildLib(
   LIBRARY_TYPE ${CTK_LIBRARY_MODE}
   )
 
-if(CTK_WRAP_PYTHONQT_FULL OR CTK_WRAP_PYTHONQT_LIGHT)
+if(DEFINED DCMTK_HAVE_CONFIG_H_OPTIONAL AND NOT DCMTK_HAVE_CONFIG_H_OPTIONAL)
+  # Workaround Debian packaging issue - See FindDCMTK.cmake for more details
+  set_target_properties(${PROJECT_NAME} PROPERTIES COMPILE_DEFINITIONS ${DCMTK_DEFINITIONS})
+  if("${CMAKE_VERSION}" VERSION_GREATER 2.8.10)
+    set_target_properties(${PROJECT_NAME} PROPERTIES INTERFACE_COMPILE_DEFINITIONS ${DCMTK_DEFINITIONS})
+  endif()
+endif()
+
+
+if(CTK_WRAP_PYTHONQT_LIGHT)
   ctkMacroBuildLibWrapper(
     TARGET ${PROJECT_NAME}
     SRCS ${KIT_SRCS}

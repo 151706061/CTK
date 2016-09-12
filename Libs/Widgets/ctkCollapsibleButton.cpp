@@ -20,7 +20,9 @@
 
 // Qt includes
 #include <QApplication>
-#include <QCleanlooksStyle>
+#if QT_VERSION < QT_VERSION_CHECK(5,0,0)
+# include <QCleanlooksStyle>
+#endif
 #include <QDebug>
 #include <QLayout>
 #include <QMouseEvent>
@@ -43,7 +45,7 @@ public:
   ctkCollapsibleButtonPrivate(ctkCollapsibleButton& object);
   void init();
   void setChildVisibility(QWidget* childWidget);
-  
+
   bool     Collapsed;
 
   // Contents frame
@@ -53,6 +55,7 @@ public:
   int            ContentsMidLineWidth;
 
   int      CollapsedHeight;
+  bool     Flat;
   bool     ExclusiveMouseOver;
   bool     LookOffWhenChecked;
 
@@ -77,6 +80,7 @@ public:
 ctkCollapsibleButtonPrivate::ctkCollapsibleButtonPrivate(ctkCollapsibleButton& object)
   :q_ptr(&object)
 {
+  this->Flat = false;
   this->ForcingVisibility = false;
   this->IsStateCreated = false;
 }
@@ -141,7 +145,13 @@ void ctkCollapsibleButtonPrivate::setChildVisibility(QWidget* childWidget)
     visible = false;
     }
 
-  childWidget->setVisible(visible);
+  // Setting Qt::WA_WState_Visible to true during child construction can have
+  // undesirable side effects.
+  if (childWidget->testAttribute(Qt::WA_WState_Created) ||
+      !visible)
+    {
+    childWidget->setVisible(visible);
+    }
 
   // setVisible() has set the ExplicitShowHide flag, restore it as we don't want
   // to make it like it was an explicit visible set because we want
@@ -175,6 +185,10 @@ void ctkCollapsibleButton::initStyleOption(QStyleOptionButton* option)const
   if (!this->isDown())
     {
     option->state |= QStyle::State_Raised;
+    }
+  if (d->Flat)
+    {
+    option->features |= QStyleOptionButton::Flat;
     }
 
   option->text = this->text();
@@ -241,6 +255,21 @@ int ctkCollapsibleButton::collapsedHeight()const
 {
   Q_D(const ctkCollapsibleButton);
   return d->CollapsedHeight;
+}
+
+//-----------------------------------------------------------------------------
+void ctkCollapsibleButton::setFlat(bool flat)
+{
+  Q_D(ctkCollapsibleButton);
+  d->Flat = flat;
+  this->update();
+}
+
+//-----------------------------------------------------------------------------
+bool ctkCollapsibleButton::isFlat()const
+{
+  Q_D(const ctkCollapsibleButton);
+  return d->Flat;
 }
 
 //-----------------------------------------------------------------------------
@@ -622,11 +651,13 @@ void ctkCollapsibleButton::paintEvent(QPaintEvent * _event)
   fopt.init(this);
   // HACK: on some styles, the frame doesn't exactly touch the button.
   // this is because the button has some kind of extra border.
+#if QT_VERSION < QT_VERSION_CHECK(5,0,0)
   if (qobject_cast<QCleanlooksStyle*>(this->style()) != 0)
     {
     fopt.rect.setTop(buttonHeight - 1);
     }
   else
+#endif
     {
     fopt.rect.setTop(buttonHeight);
     }

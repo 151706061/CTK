@@ -40,6 +40,7 @@
 #include "ctkDirectoryButtonPlugin.h"
 #include "ctkDoubleRangeSliderPlugin.h"
 #include "ctkDoubleSliderPlugin.h"
+#include "ctkDoubleSpinBoxPlugin.h"
 #include "ctkDynamicSpacerPlugin.h"
 #include "ctkExpandButtonPlugin.h"
 #include "ctkExpandableWidgetPlugin.h"
@@ -54,6 +55,7 @@
 #include "ctkPathListButtonsWidgetPlugin.h"
 #include "ctkPathListWidgetPlugin.h"
 #include "ctkPopupWidgetPlugin.h"
+#include "ctkPushButtonPlugin.h"
 #include "ctkRangeSliderPlugin.h"
 #include "ctkRangeWidgetPlugin.h"
 #include "ctkSearchBoxPlugin.h"
@@ -67,12 +69,15 @@
 #include "ctkWorkflowWidgetStepPlugin.h"
 
 /// \class Group the plugins in one library
-class CTK_WIDGETS_PLUGINS_EXPORT ctkWidgetsPlugins : public QObject,
-      public QDesignerCustomWidgetCollectionInterface
+class CTK_WIDGETS_PLUGINS_EXPORT ctkWidgetsPlugins
+  : public QObject
+  , public QDesignerCustomWidgetCollectionInterface
 {
   Q_OBJECT
-  Q_INTERFACES(QDesignerCustomWidgetCollectionInterface);
-
+  Q_INTERFACES(QDesignerCustomWidgetCollectionInterface)
+#ifdef HAVE_QT5
+  Q_PLUGIN_METADATA(IID "org.commontk.Widgets")
+#endif
 public:
   QList<QDesignerCustomWidgetInterface*> customWidgets() const
     {
@@ -91,6 +96,7 @@ public:
             << new ctkDirectoryButtonPlugin
             << new ctkDoubleRangeSliderPlugin
             << new ctkDoubleSliderPlugin
+            << new ctkDoubleSpinBoxPlugin
             << new ctkDynamicSpacerPlugin
             << new ctkExpandButtonPlugin
             << new ctkExpandableWidgetPlugin
@@ -105,6 +111,7 @@ public:
             << new ctkPathListButtonsWidgetPlugin
             << new ctkPathListWidgetPlugin
             << new ctkPopupWidgetPlugin
+            << new ctkPushButtonPlugin
             << new ctkRangeSliderPlugin
             << new ctkRangeWidgetPlugin
             << new ctkSearchBoxPlugin

@@ -20,6 +20,9 @@
 
 // Qt includes
 #include <QApplication>
+#if (QT_VERSION < 0x50000)
+#include <QCleanlooksStyle>
+#endif
 #include <QString>
 #include <QStyle>
 #include <QStyleOptionSlider>
@@ -34,6 +37,7 @@ class ctkRangeSliderTester: public QObject
 {
   Q_OBJECT
 private slots:
+  void initTestCase();
   void testGUIEvents();
   void testTooltips();
 
@@ -45,6 +49,15 @@ private slots:
   void testGrooveMouseEvents();
   void testGrooveMouseEvents_data();
 };
+
+// ----------------------------------------------------------------------------
+void ctkRangeSliderTester::initTestCase()
+{
+  // Mouse position on handles does not with with gtk style.
+#if (QT_VERSION < 0x50000)
+  QApplication::setStyle(new QCleanlooksStyle());
+#endif
+}
 
 // ----------------------------------------------------------------------------
 void ctkRangeSliderTester::testGUIEvents()
@@ -103,7 +116,7 @@ void ctkRangeSliderTester::testGrooveMouseEvents()
   QRect sliderHandleSize = rangeSlider.style()->subControlRect(
     QStyle::CC_Slider, &option, QStyle::SC_SliderHandle, &rangeSlider );
   rangeSlider.resize(100 + sliderHandleSize.width(), 20);
-  
+
   QFETCH(int, moveInPx);
   QFETCH(int, expectedMinValue);
   QFETCH(int, expectedMaxValue);
@@ -149,6 +162,13 @@ void ctkRangeSliderTester::testHandleMouseEvents()
     QStyle::CC_Slider, &option, QStyle::SC_SliderHandle, &rangeSlider );
   rangeSlider.resize(100 + sliderHandleSize.width(), 20);
 
+  rangeSlider.show();
+#if (QT_VERSION >= 0x50000)
+  QTest::qWaitForWindowActive(&rangeSlider);
+#else
+  QTest::qWaitForWindowShown(&rangeSlider);
+#endif
+
   QFETCH(bool, minHandle);
   QFETCH(bool, symmetricMoves);
   QFETCH(int, moveInPx);
@@ -168,6 +188,9 @@ void ctkRangeSliderTester::testHandleMouseEvents()
 
   QTest::mouseMove(&rangeSlider, currentCursorPos);
   QTest::mousePress(&rangeSlider, Qt::LeftButton, 0, currentCursorPos);
+  const bool isHandleDown = minHandle ? rangeSlider.isMinimumSliderDown() :
+    rangeSlider.isMaximumSliderDown();
+  QVERIFY(isHandleDown);
   currentCursorPos += QPoint(moveInPx, 0);
   ctkTest::mouseMove(&rangeSlider, Qt::LeftButton, 0, currentCursorPos);
   QTest::mouseRelease(&rangeSlider, Qt::LeftButton, 0, currentCursorPos);

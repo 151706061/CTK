@@ -22,9 +22,14 @@
 #include "ctkPluginFrameworkContext_p.h"
 #include "ctkPluginFrameworkUtil_p.h"
 #include "ctkPluginFramework_p.h"
+#include "ctkPluginFrameworkProperties_p.h"
 #include "ctkPluginArchive_p.h"
 #include "ctkPluginStorageSQL_p.h"
 #include "ctkPluginConstants.h"
+
+#include "ctkLocationManager_p.h"
+#include "ctkBasicLocation_p.h"
+
 #include "ctkServices_p.h"
 #include "ctkUtils.h"
 
@@ -33,13 +38,11 @@ QMutex ctkPluginFrameworkContext::globalFwLock;
 int ctkPluginFrameworkContext::globalId = 1;
 
 //----------------------------------------------------------------------------
-ctkPluginFrameworkContext::ctkPluginFrameworkContext(
-    const ctkProperties& initProps)
+ctkPluginFrameworkContext::ctkPluginFrameworkContext()
   : plugins(0), listeners(this), services(0), systemPlugin(new ctkPluginFramework()),
-    storage(0), firstInit(true), props(initProps), debug(props),
+    storage(0), firstInit(true), props(ctkPluginFrameworkProperties::getProperties()),
     initialized(false)
 {
-
   {
     QMutexLocker lock(&globalFwLock);
     id = globalId++;
@@ -71,20 +74,41 @@ void ctkPluginFrameworkContext::init()
 {
   log() << "initializing";
 
+  if (debug.framework)
+  {
+    ctkBasicLocation* location = ctkLocationManager::getConfigurationLocation();
+    if (location)
+    {
+      log() << "Configuration location:" << location->getUrl().toString();
+    }
+    location = ctkLocationManager::getInstallLocation();
+    if (location)
+    {
+      log() << "Install location:" << location->getUrl().toString();
+    }
+    location = ctkLocationManager::getCTKHomeLocation();
+    if (location)
+    {
+      log() << "CTK Home location:" << location->getUrl().toString();
+    }
+    location= ctkLocationManager::getUserLocation();
+    if (location)
+    {
+      log() << "User location:" << location->getUrl().toString();
+    }
+    location = ctkLocationManager::getInstanceLocation();
+    if (location)
+    {
+      log() << "Instance location" << location->getUrl().toString();
+    }
+  }
+
   if (firstInit && ctkPluginConstants::FRAMEWORK_STORAGE_CLEAN_ONFIRSTINIT
       == props[ctkPluginConstants::FRAMEWORK_STORAGE_CLEAN])
   {
     deleteFWDir();
     firstInit = false;
   }
-
-  ctkPluginFrameworkPrivate* const systemPluginPrivate = systemPlugin->d_func();
-  systemPluginPrivate->initSystemPlugin();
-
-  storage = new ctkPluginStorageSQL(this);
-  dataStorage = ctkPluginFrameworkUtil::getFileStorage(this, "data");
-  services = new ctkServices(this);
-  plugins = new ctkPlugins(this);
 
   // Pre-load libraries
   // This may speed up installing new plug-ins if they have dependencies on
@@ -103,7 +127,7 @@ void ctkPluginFrameworkContext::init()
     foreach(QString preloadLib, preloadLibs)
     {
       QLibrary lib;
-      QStringList nameAndVersion = preloadLib.split(":");
+      QStringList nameAndVersion = preloadLib.split("$");
 
       QString libraryName;
       if (nameAndVersion.count() == 1)
@@ -118,18 +142,26 @@ void ctkPluginFrameworkContext::init()
       }
       else
       {
-        qWarning() << "Wrong syntax in" << preloadLib << ". Use <lib-name>[:version]. Skipping.";
+        qWarning() << "Wrong syntax in" << preloadLib << ". Use <lib-name>[$version]. Skipping.";
         continue;
       }
 
       lib.setLoadHints(loadHints);
-      log() << "Pre-loading library" << libraryName << "with hints [" << static_cast<int>(loadHints) << "]";
+      log() << "Pre-loading library" << lib.fileName() << "with hints [" << static_cast<int>(loadHints) << "]";
       if (!lib.load())
       {
-        qWarning() << "Pre-loading library" << libraryName << "failed. Check your library search paths.";
+        qWarning() << "Pre-loading library" << lib.fileName() << "failed:" << lib.errorString() << "\nCheck your library search paths.";
       }
     }
   }
+
+  ctkPluginFrameworkPrivate* const systemPluginPrivate = systemPlugin->d_func();
+  systemPluginPrivate->initSystemPlugin();
+
+  storage = new ctkPluginStorageSQL(this);
+  dataStorage = ctkPluginFrameworkUtil::getFileStorage(this, "data");
+  services = new ctkServices(this);
+  plugins = new ctkPlugins(this);
 
   plugins->load();
 

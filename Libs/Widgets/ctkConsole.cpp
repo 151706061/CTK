@@ -50,11 +50,16 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 // Qt includes
 #include <QAbstractItemView>
+#include <QAction>
 #include <QApplication>
 #include <QClipboard>
 #include <QCompleter>
+#include <QFile>
+#include <QFileDialog>
 #include <QKeyEvent>
+#include <QMimeData>
 #include <QPointer>
+#include <QPushButton>
 #include <QTextCursor>
 #include <QVBoxLayout>
 #include <QScrollBar>
@@ -90,7 +95,11 @@ ctkConsolePrivate::ctkConsolePrivate(ctkConsole& object) :
   InteractivePosition(documentEnd()),
   MultilineStatement(false), Ps1("$ "), Ps2("> "),
   EditorHints(ctkConsole::AutomaticIndentation | ctkConsole::RemoveTrailingSpaces),
-  ScrollbarAtBottom(false)
+  ScrollbarAtBottom(false),
+  CompleterShortcuts(QList<QKeySequence>() << Qt::Key_Tab),
+  RunFileOptions(ctkConsole::RunFileShortcut),
+  RunFileButton(NULL),
+  RunFileAction(NULL)
 {
 }
 
@@ -124,12 +133,99 @@ void ctkConsolePrivate::init()
   this->CommandHistory.append("");
   this->CommandPosition = 0;
 
+  this->RunFileAction = new QAction(q->tr("&Run file"), q);
+  this->RunFileAction->setShortcut(q->tr("Ctrl+r"));
+  connect(this->RunFileAction, SIGNAL(triggered()), q, SLOT(runFile()));
+  q->addAction(this->RunFileAction);
+
+  QAction* printHelpAction = new QAction(q->tr("Print &help"),q);
+  printHelpAction->setShortcut(q->tr("Ctrl+h"));
+  connect(printHelpAction, SIGNAL(triggered()), q, SLOT(printHelp()));
+  q->addAction(printHelpAction);
+
+  this->RunFileButton = new QPushButton(q);
+  this->RunFileButton->setText(q->tr("&Run script from file"));
+  this->RunFileButton->setVisible(false);
+
   QVBoxLayout * layout = new QVBoxLayout(q);
   layout->setMargin(0);
+  layout->setSpacing(0);
   layout->addWidget(this);
+  layout->addWidget(this->RunFileButton);
 
   connect(this->verticalScrollBar(), SIGNAL(valueChanged(int)),
           SLOT(onScrollBarValueChanged(int)));
+  connect(this, SIGNAL(textChanged()), SLOT(onTextChanged()));
+  connect(this->RunFileButton, SIGNAL(clicked()), q, SLOT(runFile()));
+}
+
+//-----------------------------------------------------------------------------
+bool ctkConsolePrivate::isMoveLeftWithinLine(QKeyEvent* e, QTextCursor::MoveOperation &moveOperation, QTextCursor::MoveMode &moveMode)
+{
+  if (e == QKeySequence::MoveToPreviousChar)
+    {
+    moveOperation = QTextCursor::Left;
+    moveMode = QTextCursor::MoveAnchor;
+    return true;
+    }
+  else if (e == QKeySequence::SelectPreviousChar)
+    {
+    moveOperation = QTextCursor::Left;
+    moveMode = QTextCursor::KeepAnchor;
+    return true;
+    }
+  else if (e == QKeySequence::MoveToPreviousWord)
+    {
+    moveOperation = QTextCursor::WordLeft;
+    moveMode = QTextCursor::MoveAnchor;
+    return true;
+    }
+  else if (e == QKeySequence::SelectPreviousWord)
+    {
+    moveOperation = QTextCursor::WordLeft;
+    moveMode = QTextCursor::KeepAnchor;
+    return true;
+    }
+  else if (e == QKeySequence::MoveToStartOfLine)
+    {
+    moveOperation = QTextCursor::StartOfLine;
+    moveMode = QTextCursor::MoveAnchor;
+    return true;
+    }
+  else if (e == QKeySequence::SelectStartOfLine)
+    {
+    moveOperation = QTextCursor::StartOfLine;
+    moveMode = QTextCursor::KeepAnchor;
+    return true;
+    }
+  else if (e == QKeySequence::MoveToStartOfBlock)
+    {
+    moveOperation = QTextCursor::StartOfLine;
+    moveMode = QTextCursor::MoveAnchor;
+    return true;
+    }
+  else if (e == QKeySequence::SelectStartOfBlock)
+    {
+    moveOperation = QTextCursor::StartOfLine;
+    moveMode = QTextCursor::KeepAnchor;
+    return true;
+    }
+  else if (e == QKeySequence::MoveToStartOfDocument)
+    {
+    moveOperation = QTextCursor::StartOfLine;
+    moveMode = QTextCursor::MoveAnchor;
+    return true;
+    }
+  else if (e == QKeySequence::SelectStartOfDocument)
+    {
+    moveOperation = QTextCursor::StartOfLine;
+    moveMode = QTextCursor::KeepAnchor;
+    return true;
+    }
+  else
+    {
+    return false;
+    }
 }
 
 //-----------------------------------------------------------------------------
@@ -152,173 +248,185 @@ void ctkConsolePrivate::keyPressEvent(QKeyEvent* e)
       }
     }
 
-    QTextCursor text_cursor = this->textCursor();
+  QTextCursor text_cursor = this->textCursor();
 
-    // Set to true if there's a current selection
-    const bool selection = text_cursor.anchor() != text_cursor.position();
-    // Set to true if the cursor overlaps the history area
-    const bool history_area =
-      text_cursor.anchor() < this->InteractivePosition
-      || text_cursor.position() < this->InteractivePosition;
+  // Set to true if there's a current selection
+  const bool selection = text_cursor.anchor() != text_cursor.position();
+  // Set to true if the cursor overlaps the history area
+  const bool history_area = this->isCursorInHistoryArea();
 
-    // Allow copying anywhere in the console ...
-    if(e->key() == Qt::Key_C && e->modifiers() == Qt::ControlModifier)
+  // Allow copying anywhere in the console ...
+  if(e == QKeySequence::Copy)
+    {
+    if(selection)
       {
-      if(selection)
-        {
-        this->copy();
-        }
-
-      e->accept();
-      return;
+      this->copy();
       }
+    e->accept();
+    return;
+    }
 
-    // Allow cut only if the selection is limited to the interactive area ...
-    if(e->key() == Qt::Key_X && e->modifiers() == Qt::ControlModifier)
+  // Allow cut only if the selection is limited to the interactive area ...
+  if(e == QKeySequence::Cut)
+    {
+    if(selection && !history_area)
       {
-      if(selection && !history_area)
-        {
-        this->cut();
-        }
-
-      e->accept();
-      return;
+      this->cut();
       }
+    e->accept();
+    return;
+    }
 
-    // Allow paste only if the selection is in the interactive area ...
-    if(e->key() == Qt::Key_V && e->modifiers() == Qt::ControlModifier)
-      {
-      if(!history_area)
-        {
-        const QMimeData* const clipboard = QApplication::clipboard()->mimeData();
-        const QString text = clipboard->text();
-        if(!text.isNull())
-          {
-          if (this->EditorHints & ctkConsole::SplitCopiedTextByLine)
-            {
-            QStringList lines = text.split(QRegExp("(?:\r\n|\r|\n)"));
-            for(int i=0; i < lines.count(); ++i)
-              {
-              this->switchToUserInputTextColor(&text_cursor);
-              text_cursor.insertText(lines.at(i));
-              this->updateCommandBuffer();
-              if (i < lines.count() - 1)
-                {
-                this->internalExecuteCommand();
-                }
-              }
-            }
-          else
-            {
-            this->switchToUserInputTextColor(&text_cursor);
-            text_cursor.insertText(text);
-            this->updateCommandBuffer();
-            }
-          }
-        }
-
-      e->accept();
-      return;
-      }
-
-    // Force the cursor back to the interactive area
-    if(history_area && e->key() != Qt::Key_Control)
+  // Paste to the end of document if in the history area
+  if(e == QKeySequence::Paste)
+    {
+    if(history_area)
       {
       text_cursor.setPosition(this->documentEnd());
       this->setTextCursor(text_cursor);
-
       }
+    this->paste();
+    e->accept();
+    return;
+    }
 
-    switch(e->key())
+  // Allow vertical scrolling using page up/down
+  if (e == QKeySequence::MoveToPreviousPage || e == QKeySequence::SelectPreviousPage
+    || e == QKeySequence::MoveToNextPage || e == QKeySequence::SelectNextPage)
+    {
+    if (e == QKeySequence::SelectPreviousPage || e == QKeySequence::SelectNextPage)
       {
-      case Qt::Key_Up:
-        e->accept();
+      // ignore
+      e->accept();
+      }
+    else
+      {
+      this->Superclass::keyPressEvent(e);
+      this->updateCommandBuffer();
+      }
+    return;
+    }
 
-        if (this->CommandPosition > 0)
-          {
-          this->replaceCommandBuffer(this->CommandHistory[--this->CommandPosition]);
-          }
-        break;
+  // Force the cursor back to the interactive area if anything else than copy/paste or page up/down is done
+  // but only when a "real" key is pressed, not just a modifier (otherwise we could not press Control-c in the
+  // history area because the cursor would jump to the interactive area immediately when Control is pressed)
+  if(history_area
+       && e->key() != Qt::Key_Control
+       && e->key() != Qt::Key_Meta
+       && e->key() != Qt::Key_Alt
+       && e->key() != Qt::Key_Shift)
+    {
+    text_cursor.setPosition(this->documentEnd());
+    this->setTextCursor(text_cursor);
+    }
 
-      case Qt::Key_Down:
-        e->accept();
+  // Start of line should be the start of interactive area
+  QTextCursor::MoveOperation moveOperation = QTextCursor::NoMove;
+  QTextCursor::MoveMode moveMode = QTextCursor::MoveAnchor;
+  if(isMoveLeftWithinLine(e, moveOperation, moveMode))
+    {
+    text_cursor.movePosition(moveOperation, moveMode);
+    if (text_cursor.position() > this->InteractivePosition)
+      {
+      this->Superclass::keyPressEvent(e);
+      }
+    else
+      {
+      text_cursor.setPosition(this->InteractivePosition, moveMode);
+      this->setTextCursor(text_cursor);
+      e->accept();
+      }
+    return;
+    }
 
-        if (this->CommandPosition < this->CommandHistory.size() - 2)
-          {
-          this->replaceCommandBuffer(this->CommandHistory[++this->CommandPosition]);
-          }
-        else
-          {
-          this->CommandPosition = this->CommandHistory.size()-1;
-          this->replaceCommandBuffer("");
-          }
-        break;
+  if (e == QKeySequence::Delete)
+    {
+    e->accept();
+    this->Superclass::keyPressEvent(e);
+    this->updateCommandBuffer();
+    return;
+    }
 
-      case Qt::Key_Left:
-        if (text_cursor.position() > this->InteractivePosition)
-          {
-          this->Superclass::keyPressEvent(e);
-          }
-        else
-          {
-          e->accept();
-          }
-        break;
+  // There seems to be no QKeySequence for backspace, therefore the key 
+  // has to be recognized directly (the same way as it is done in the parent class)
+  if (e->key() == Qt::Key_Backspace && !(e->modifiers() & ~Qt::ShiftModifier))
+    {
+    e->accept();
+    if(text_cursor.position() > this->InteractivePosition)
+      {
+      this->Superclass::keyPressEvent(e);
+      this->updateCommandBuffer();
+      this->updateCompleterIfVisible();
+      }
+    return;
+    }
 
-      case Qt::Key_Delete:
-        e->accept();
-        this->Superclass::keyPressEvent(e);
-        this->updateCommandBuffer();
-        break;
-
-      case Qt::Key_Backspace:
-        e->accept();
-        if(text_cursor.position() > this->InteractivePosition)
-          {
-          this->Superclass::keyPressEvent(e);
-          this->updateCommandBuffer();
-          this->updateCompleterIfVisible();
-          }
-        break;
-
-      case Qt::Key_Tab:
-        e->accept();
-        this->updateCompleter();
-        this->selectCompletion();
-        break;
-
-      case Qt::Key_Home:
-        e->accept();
-        text_cursor.setPosition(this->InteractivePosition);
-        this->setTextCursor(text_cursor);
-        break;
-
-      case Qt::Key_Return:
-      case Qt::Key_Enter:
-        e->accept();
-
-        text_cursor.setPosition(this->documentEnd());
-        this->setTextCursor(text_cursor);
-
-        if (this->InputEventLoop.isNull())
-          {
-          this->internalExecuteCommand();
-          }
-        else
-          {
-          this->processInput();
-          }
-        break;
-
-      default:
-        e->accept();
-        this->switchToUserInputTextColor();
-
+  if (e == QKeySequence::DeleteStartOfWord)
+      {
+      e->accept();
+      if(text_cursor.position() > this->InteractivePosition)
+        {
         this->Superclass::keyPressEvent(e);
         this->updateCommandBuffer();
         this->updateCompleterIfVisible();
-        break;
+        }
+      return;
       }
+
+  if (e == QKeySequence::MoveToPreviousLine || e == QKeySequence::SelectPreviousLine)
+    {
+    e->accept();
+    if (this->CommandPosition > 0)
+      {
+      this->replaceCommandBuffer(this->CommandHistory[--this->CommandPosition]);
+      }
+    return;
+    }
+
+  if (e == QKeySequence::MoveToNextLine || e == QKeySequence::SelectNextLine)
+    {
+    e->accept();
+    if (this->CommandPosition < this->CommandHistory.size() - 2)
+      {
+      this->replaceCommandBuffer(this->CommandHistory[++this->CommandPosition]);
+      }
+    else
+      {
+      this->CommandPosition = this->CommandHistory.size()-1;
+      this->replaceCommandBuffer("");
+      }
+    return;
+    }
+
+  if (e == QKeySequence::InsertParagraphSeparator)
+    {
+    e->accept();
+    text_cursor.setPosition(this->documentEnd());
+    this->setTextCursor(text_cursor);
+    if (this->InputEventLoop.isNull())
+      {
+      this->internalExecuteCommand();
+      }
+    else
+      {
+      this->processInput();
+      }
+    return;
+    }
+
+  if (this->CompleterShortcuts.contains(e->key() + e->modifiers()))
+    {
+    e->accept();
+    this->updateCompleter();
+    this->selectCompletion();
+    return;
+    }
+
+  e->accept();
+  this->switchToUserInputTextColor();
+  this->Superclass::keyPressEvent(e);
+  this->updateCommandBuffer();
+  this->updateCompleterIfVisible();
 }
 
 //-----------------------------------------------------------------------------
@@ -330,14 +438,21 @@ void ctkConsolePrivate::switchToUserInputTextColor(QTextCursor* textCursorToUpda
     color = this->StdinTextColor;
     }
   QTextCharFormat currentFormat = this->currentCharFormat();
-  currentFormat.setForeground(color);
-  this->setCurrentCharFormat(currentFormat);
+  // Do not trigger a finishEdit for no reason. onTextChanged() would be called.
+  if (currentFormat.foreground() != color)
+    {
+    currentFormat.setForeground(color);
+    this->setCurrentCharFormat(currentFormat);
+    }
 
   if (textCursorToUpdate)
     {
     QTextCharFormat textCursorFormat = textCursorToUpdate->charFormat();
-    textCursorFormat.setForeground(color);
-    textCursorToUpdate->setCharFormat(textCursorFormat);
+    if (textCursorFormat.foreground() != color)
+      {
+      textCursorFormat.setForeground(color);
+      textCursorToUpdate->setCharFormat(textCursorFormat);
+      }
     }
 }
 
@@ -544,8 +659,6 @@ void ctkConsolePrivate::printString(const QString& text)
   this->textCursor().movePosition(QTextCursor::End);
   this->textCursor().insertText(text);
   this->InteractivePosition = this->documentEnd();
-  this->ensureCursorVisible();
-  this->scrollToBottom();
 }
 
 //----------------------------------------------------------------------------
@@ -609,8 +722,6 @@ void ctkConsolePrivate::prompt(const QString& text)
 
   this->textCursor().insertText(text);
   this->InteractivePosition = this->documentEnd();
-  this->ensureCursorVisible();
-  this->scrollToBottom();
 }
 
 //----------------------------------------------------------------------------
@@ -626,6 +737,7 @@ void ctkConsolePrivate::printWelcomeMessage()
 //-----------------------------------------------------------------------------
 void ctkConsolePrivate::insertCompletion(const QString& completion)
 {
+  Q_Q(ctkConsole);
   QTextCursor tc = this->textCursor();
   tc.movePosition(QTextCursor::Left, QTextCursor::KeepAnchor);
   if (tc.selectedText()==".")
@@ -640,6 +752,16 @@ void ctkConsolePrivate::insertCompletion(const QString& completion)
     tc.insertText(completion);
     this->setTextCursor(tc);
     }
+  tc.movePosition(QTextCursor::StartOfBlock);
+  tc.movePosition(QTextCursor::EndOfBlock, QTextCursor::KeepAnchor);
+  QString shellLine = tc.selectedText();
+  shellLine.replace(q->ps1(), "");
+  shellLine.replace(q->ps2(), "");
+  tc.movePosition(QTextCursor::EndOfLine, QTextCursor::MoveAnchor);
+  this->setTextCursor(tc);
+  int cursorOffset = this->Completer->cursorOffset(shellLine);
+  tc.movePosition(QTextCursor::Left, QTextCursor::MoveAnchor, cursorOffset);
+  this->setTextCursor(tc);
   this->updateCommandBuffer();
 }
 
@@ -647,6 +769,70 @@ void ctkConsolePrivate::insertCompletion(const QString& completion)
 void ctkConsolePrivate::onScrollBarValueChanged(int value)
 {
   this->ScrollbarAtBottom = (this->verticalScrollBar()->maximum() == value);
+}
+
+//-----------------------------------------------------------------------------
+void ctkConsolePrivate::onTextChanged()
+{
+  this->scrollToBottom();
+  this->ensureCursorVisible();
+}
+
+//-----------------------------------------------------------------------------
+bool ctkConsolePrivate::isCursorInHistoryArea()const
+{
+  return this->textCursor().anchor() < this->InteractivePosition
+    || this->textCursor().position() < this->InteractivePosition;
+}
+
+//-----------------------------------------------------------------------------
+void ctkConsolePrivate::insertFromMimeData(const QMimeData* source)
+{
+  if (this->isCursorInHistoryArea())
+    {
+    QTextCursor textCursor = this->textCursor();
+    textCursor.movePosition(QTextCursor::End, QTextCursor::MoveAnchor);
+    this->setTextCursor(textCursor);
+    }
+  const QString text = source->text();
+  if (!text.isEmpty())
+    {
+    this->pasteText(text);
+    }
+  else
+    {
+    this->Superclass::insertFromMimeData(source);
+    }
+}
+
+//-----------------------------------------------------------------------------
+void ctkConsolePrivate::pasteText(const QString& text)
+{
+  if(text.isNull())
+    {
+    return;
+    }
+  QTextCursor textCursor = this->textCursor();
+  if (this->EditorHints & ctkConsole::SplitCopiedTextByLine)
+    {
+    QStringList lines = text.split(QRegExp("(?:\r\n|\r|\n)"));
+    for(int i=0; i < lines.count(); ++i)
+      {
+      this->switchToUserInputTextColor(&textCursor);
+      textCursor.insertText(lines.at(i));
+      this->updateCommandBuffer();
+      if (i < lines.count() - 1)
+        {
+        this->internalExecuteCommand();
+        }
+      }
+    }
+  else
+    {
+    this->switchToUserInputTextColor(&textCursor);
+    textCursor.insertText(text);
+    this->updateCommandBuffer();
+    }
 }
 
 //-----------------------------------------------------------------------------
@@ -790,11 +976,77 @@ void ctkConsole::setScrollBarPolicy(const Qt::ScrollBarPolicy& newScrollBarPolic
 }
 
 //-----------------------------------------------------------------------------
+CTK_GET_CPP(ctkConsole, QList<QKeySequence>, completerShortcuts, CompleterShortcuts);
+
+//-----------------------------------------------------------------------------
+void ctkConsole::setCompleterShortcuts(const QList<QKeySequence>& keys)
+{
+  Q_D(ctkConsole);
+  d->CompleterShortcuts = keys;
+}
+
+//-----------------------------------------------------------------------------
+void ctkConsole::addCompleterShortcut(const QKeySequence& key)
+{
+  Q_D(ctkConsole);
+  if (!d->CompleterShortcuts.contains(key))
+    {
+    d->CompleterShortcuts.append(key);
+    }
+}
+
+//-----------------------------------------------------------------------------
+CTK_GET_CPP(ctkConsole, ctkConsole::RunFileOptions, runFileOptions, RunFileOptions);
+
+//-----------------------------------------------------------------------------
+void ctkConsole::setRunFileOptions(const RunFileOptions& newOptions)
+{
+  Q_D(ctkConsole);
+  d->RunFileButton->setVisible(newOptions.testFlag(ctkConsole::RunFileButton));
+  d->RunFileAction->setEnabled(newOptions.testFlag(ctkConsole::RunFileShortcut));
+}
+
+//-----------------------------------------------------------------------------
 void ctkConsole::exec(const QString& command)
 {
   Q_D(ctkConsole);
   d->replaceCommandBuffer(command);
   d->internalExecuteCommand();
+}
+
+//-----------------------------------------------------------------------------
+void ctkConsole::runFile(const QString& filePath)
+{
+  QFile file(filePath);
+  if (!file.open(QIODevice::ReadOnly))
+    {
+    qWarning() << tr( "File '%1' can't be read.").arg(filePath);
+    return;
+    }
+  for (QTextStream fileStream(&file); !fileStream.atEnd();)
+    {
+    QString line = fileStream.readLine();
+    this->exec(line);
+    }
+}
+
+//-----------------------------------------------------------------------------
+void ctkConsole::runFile()
+{
+  QString filePath =
+    QFileDialog::getOpenFileName(this, tr("Select a script file to run"));
+  if (!filePath.isEmpty())
+    {
+    this->runFile(filePath);
+    }
+}
+
+//-----------------------------------------------------------------------------
+void ctkConsole::printHelp()
+{
+  this->printMessage("\n", Qt::gray);
+  this->printMessage(tr("CTRL+h: Print this help message\n"), Qt::gray);
+  this->printMessage(tr("CTRL+r: Open a file dialog to select a file to run\n"), Qt::gray);
 }
 
 //-----------------------------------------------------------------------------

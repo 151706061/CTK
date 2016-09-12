@@ -35,8 +35,13 @@
 
 //----------------------------------------------------------------------------
 ctkEventAdminTestActivator::ctkEventAdminTestActivator()
-  : topicWildcardTestSuite(0), topicWildcardTestSuiteSS(0),
-    scenario1TestSuite(0), scenario1TestSuiteSS(0), scenario2TestSuite(0)
+  : topicWildcardTestSuite(0)
+  , topicWildcardTestSuiteSS(0)
+  , scenario1TestSuite(0)
+  , scenario1TestSuiteSS(0)
+  , scenario2TestSuite(0)
+  , scenario3TestSuite(0)
+  , scenario4TestSuite(0)
 {
 
 }
@@ -49,6 +54,8 @@ ctkEventAdminTestActivator::~ctkEventAdminTestActivator()
   delete scenario1TestSuite;
   delete scenario1TestSuiteSS;
   delete scenario2TestSuite;
+  delete scenario3TestSuite;
+  delete scenario4TestSuite;
 }
 
 //----------------------------------------------------------------------------
@@ -122,4 +129,6 @@ void ctkEventAdminTestActivator::stop(ctkPluginContext* context)
   scenario4TestSuite = 0;
 }
 
+#if QT_VERSION < QT_VERSION_CHECK(5,0,0)
 Q_EXPORT_PLUGIN2(org_commontk_eventadmintest, ctkEventAdminTestActivator)
+#endif

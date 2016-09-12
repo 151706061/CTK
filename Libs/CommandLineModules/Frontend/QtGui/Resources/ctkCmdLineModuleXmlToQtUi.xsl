@@ -97,6 +97,7 @@
       <xsl:when test="$cliType='integer'"><xsl:value-of select="$integerValueProperty"/></xsl:when>
       <xsl:when test="$cliType='float'"><xsl:value-of select="$floatValueProperty"/></xsl:when>
       <xsl:when test="$cliType='double'"><xsl:value-of select="$floatValueProperty"/></xsl:when>
+      <xsl:when test="$cliType='string'"><xsl:value-of select="$vectorValueProperty"/></xsl:when>
       <xsl:when test="$cliType='point'"><xsl:value-of select="$pointValueProperty"/></xsl:when>
       <xsl:when test="$cliType='region'"><xsl:value-of select="$regionValueProperty"/></xsl:when>
       <xsl:when test="$cliType='image' and $cliChannel='input'"><xsl:value-of select="$imageInputValueProperty"/></xsl:when>
@@ -245,7 +246,13 @@
     <property name="nameFilters">
       <stringlist>
       <xsl:for-each select="tokenize(@fileExtensions, ',')">
-        <string><xsl:value-of select="normalize-space(.)"/></string>
+        <string>
+        <xsl:choose>
+          <xsl:when test="starts-with(normalize-space(.), '.')">*</xsl:when>
+          <xsl:otherwise>*.</xsl:otherwise>
+        </xsl:choose>
+        <xsl:value-of select="normalize-space(.)"/>
+        </string>
       </xsl:for-each>
       </stringlist>
     </property>

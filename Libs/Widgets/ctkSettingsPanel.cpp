@@ -36,10 +36,10 @@ namespace
 // --------------------------------------------------------------------------
 struct PropertyType
 {
+  typedef PropertyType Self;
   PropertyType();
   QObject* Object;
   QString  Property;
-  QVariant PreviousValue;
   QVariant DefaultValue;
   QString  Label;
   QSettings* Settings;
@@ -48,7 +48,17 @@ struct PropertyType
   QVariant value()const;
   bool setValue(const QVariant& value);
 
+  QVariant previousValue()const;
+  void setPreviousValue(const QVariant& value);
+
   QMetaProperty metaProperty();
+
+  /// Workaround https://bugreports.qt.io/browse/QTBUG-19823
+  static QVariant fixEmptyStringListVariant(const QVariant& value, const char* _typename);
+
+private:
+
+  QVariant PreviousValue;
 };
 
 // --------------------------------------------------------------------------
@@ -78,14 +88,41 @@ bool PropertyType::setValue(const QVariant& val)
     return false;
     }
   QVariant value(val);
-  // HACK - See http://bugreports.qt.nokia.com/browse/QTBUG-19823
-  if (qstrcmp(this->metaProperty().typeName(), "QStringList") == 0 && !value.isValid())
+  value = Self::fixEmptyStringListVariant(value,
+                                          this->metaProperty().typeName());
+  bool success = true;
+  if (this->Object->property(this->Property.toLatin1()) != value)
     {
-    value = QVariant(QStringList());
+    success = this->Object->setProperty(this->Property.toLatin1(), value);
     }
-  bool success = this->Object->setProperty(this->Property.toLatin1(), value);
   Q_ASSERT(success);
   return success;
+}
+
+// --------------------------------------------------------------------------
+QVariant PropertyType::previousValue()const
+{
+  return this->PreviousValue;
+}
+
+// --------------------------------------------------------------------------
+void PropertyType::setPreviousValue(const QVariant& val)
+{
+  this->PreviousValue =
+      Self::fixEmptyStringListVariant(val, this->metaProperty().typeName());
+}
+
+// --------------------------------------------------------------------------
+QVariant PropertyType::fixEmptyStringListVariant(const QVariant& value,
+                                                 const char* _typename)
+{
+  QVariant fixedValue = value;
+  // HACK - See https://bugreports.qt.io/browse/QTBUG-19823
+  if (qstrcmp(_typename, "QStringList") == 0 && !value.isValid())
+    {
+    fixedValue = QVariant(QStringList());
+    }
+  return fixedValue;
 }
 
 // --------------------------------------------------------------------------
@@ -187,11 +224,11 @@ void ctkSettingsPanel::setSettings(QSettings* settings)
     return;
     }
   d->Settings = settings;
-  this->updateProperties();
+  this->reloadSettings();
 }
 
 // --------------------------------------------------------------------------
-void ctkSettingsPanel::updateProperties()
+void ctkSettingsPanel::reloadSettings()
 {
   Q_D(ctkSettingsPanel);
   foreach(const QString& key, d->Properties.keys())
@@ -207,7 +244,7 @@ void ctkSettingsPanel::updateProperties()
       PropertyType& prop = d->Properties[key];
       // Update object registered using registerProperty()
       prop.setValue(value);
-      prop.PreviousValue = value;
+      prop.setPreviousValue(value);
       }
     else
       {
@@ -237,6 +274,8 @@ void ctkSettingsPanel::setSetting(const QString& key, const QVariant& newVal)
     return;
     }
   QVariant oldVal = settings->value(key);
+  oldVal = PropertyType::fixEmptyStringListVariant(
+        oldVal, d->Properties[key].metaProperty().typeName());
   settings->setValue(key, newVal);
   d->Properties[key].setValue(newVal);
   if (settings->status() != QSettings::NoError)
@@ -264,7 +303,8 @@ void ctkSettingsPanel::registerProperty(const QString& key,
   PropertyType prop;
   prop.Object = object;
   prop.Property = property;
-  prop.DefaultValue = prop.PreviousValue = prop.value();
+  prop.setPreviousValue(prop.value());
+  prop.DefaultValue = prop.previousValue();
   prop.Label = label;
   prop.Options = options;
   if (d->Settings != settings)
@@ -277,7 +317,7 @@ void ctkSettingsPanel::registerProperty(const QString& key,
     {
     QVariant val = propSettings->value(key);
     prop.setValue(val);
-    prop.PreviousValue = val;
+    prop.setPreviousValue(val);
     }
     
   d->Properties[key] = prop;
@@ -294,6 +334,16 @@ void ctkSettingsPanel::registerProperty(const QString& key,
     {
     this->updateSetting(key);
     }
+}
+
+// --------------------------------------------------------------------------
+void ctkSettingsPanel::registerProperty(
+  const QString& key, QObject* object, const QString& property,
+  const QByteArray& signal, const QString& label,
+  ctkSettingsPanel::SettingOptions options, QSettings* settings)
+{
+  this->registerProperty(key, object, property, signal.constData(),
+                         label, options, settings);
 }
 
 // --------------------------------------------------------------------------
@@ -315,7 +365,7 @@ QVariant ctkSettingsPanel::previousPropertyValue(const QString& key) const
     {
     return QVariant();
     }
-  return d->Properties.value(key).PreviousValue;
+  return d->Properties.value(key).previousValue();
 }
 
 // --------------------------------------------------------------------------
@@ -337,7 +387,7 @@ QStringList ctkSettingsPanel::changedSettings()const
   foreach(const QString& key, d->Properties.keys())
     {
     const PropertyType& prop = d->Properties[key];
-    if (prop.PreviousValue != prop.value())
+    if (prop.previousValue() != prop.value())
       {
       settingsKeys << key;
       }
@@ -367,7 +417,7 @@ void ctkSettingsPanel::applySettings()
   foreach(const QString& key, d->Properties.keys())
     {
     PropertyType& prop = d->Properties[key];
-    prop.PreviousValue = prop.value();
+    prop.setPreviousValue(prop.value());
     }
 }
 
@@ -377,7 +427,7 @@ void ctkSettingsPanel::resetSettings()
   Q_D(ctkSettingsPanel);
   foreach(const QString& key, d->Properties.keys())
     {
-    this->setSetting(key, d->Properties[key].PreviousValue);
+    this->setSetting(key, d->Properties[key].previousValue());
     }
 }
 

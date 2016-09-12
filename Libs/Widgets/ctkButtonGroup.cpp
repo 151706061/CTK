@@ -18,10 +18,9 @@
 
 =========================================================================*/
 
-//Qt includes  
+//Qt includes
 #include <QAbstractButton>
 #include <QDebug>
-#include <QWeakPointer>
 
 // CTK includes
 #include "ctkButtonGroup.h"
@@ -48,6 +47,25 @@ ctkButtonGroup::ctkButtonGroup(QObject* _parent)
 }
 
 //------------------------------------------------------------------------------
+void ctkButtonGroup::setChecked(QAbstractButton* button, bool checked)
+{
+  if (!button)
+    {
+    return;
+    }
+  bool wasExclusive = this->exclusive();
+  if (!checked)
+    {
+    this->setExclusive(false);
+    }
+  button->setChecked(checked);
+  if (!checked)
+    {
+    this->setExclusive(wasExclusive);
+    }
+}
+
+//------------------------------------------------------------------------------
 ctkButtonGroup::~ctkButtonGroup()
 {
 }
@@ -65,10 +83,15 @@ void ctkButtonGroup::onButtonClicked(int buttonId)
   // here the button is clicked and we click it again... so we want to
   // uncheck, a behavior not supported by QButtonGroup.
   // The only way to uncheck the button is to remove it from the group, and put it back
+  const int oldId = this->id(clickedButton);
   this->removeButton(clickedButton);
   clickedButton->setChecked(false);
-  this->addButton(clickedButton);
+  this->addButton(clickedButton, oldId);
   d->IsLastButtonPressedChecked = false;
+#if QT_VERSION >= 0x050200
+  emit buttonToggled(oldId, false);
+  emit buttonToggled(clickedButton, false);
+#endif
 }
 
 //------------------------------------------------------------------------------
@@ -79,5 +102,3 @@ void ctkButtonGroup::onButtonPressed(int buttonId)
   Q_ASSERT(pressedButton);
   d->IsLastButtonPressedChecked = pressedButton->isChecked();
 }
-
-

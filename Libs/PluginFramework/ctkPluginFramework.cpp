@@ -38,6 +38,9 @@ ctkPluginFramework::ctkPluginFramework()
   qRegisterMetaType<ctkEvent>("ctkEvent");
   qRegisterMetaType<ctkProperties>("ctkProperties");
   qRegisterMetaType<ctkDictionary>("ctkDictionary");
+  qRegisterMetaType<ctkServiceReference>("ctkServiceReference");
+  qRegisterMetaType<QSharedPointer<ctkPlugin> >("QSharedPointer<ctkPlugin>");
+  //TODO: register all ctk Framework defined MetaType.
 }
 
 //----------------------------------------------------------------------------
@@ -116,6 +119,8 @@ void ctkPluginFramework::start(const ctkPlugin::StartOptions& options)
 
     pluginsToStart = d->fwCtx->storage->getStartOnLaunchPlugins();
   }
+
+  d->activate(d->pluginContext.data());
 
   // Start plugins according to their autostart setting.
   QStringListIterator i(pluginsToStart);

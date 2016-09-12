@@ -26,7 +26,7 @@
 #include <QStringList>
 #include <QSqlDatabase>
 
-#include "ctkDICOMDataset.h"
+#include "ctkDICOMItem.h"
 #include "ctkDICOMCoreExport.h"
 
 class QDateTime;
@@ -132,8 +132,15 @@ public:
   Q_INVOKABLE QStringList patients ();
   Q_INVOKABLE QStringList studiesForPatient (const QString patientUID);
   Q_INVOKABLE QStringList seriesForStudy (const QString studyUID);
+  Q_INVOKABLE QString studyForSeries(QString seriesUID);
+  Q_INVOKABLE QString patientForStudy(QString studyUID);
   Q_INVOKABLE QStringList filesForSeries (const QString seriesUID);
+  Q_INVOKABLE QHash<QString,QString> descriptionsForFile(QString fileName);
+  Q_INVOKABLE QString descriptionForSeries(const QString seriesUID);
+  Q_INVOKABLE QString descriptionForStudy(const QString studyUID);
+  Q_INVOKABLE QString nameForPatient(const QString patientUID);
   Q_INVOKABLE QString fileForInstance (const QString sopInstanceUID);
+  Q_INVOKABLE QString seriesForFile (QString fileName);
   Q_INVOKABLE QString instanceForFile (const QString fileName);
   Q_INVOKABLE QDateTime insertDateTimeForInstance (const QString fileName);
 
@@ -177,9 +184,9 @@ public:
   ///                  does only make sense if a full object is received.
   /// @param @generateThumbnail If true, a thumbnail is generated.
   ///
-  Q_INVOKABLE void insert( const ctkDICOMDataset& ctkDataset,
+  Q_INVOKABLE void insert( const ctkDICOMItem& ctkDataset,
                               bool storeFile, bool generateThumbnail);
-  void insert ( DcmDataset *dataset,
+  void insert ( DcmItem *item,
                               bool storeFile = true, bool generateThumbnail = true);
   Q_INVOKABLE void insert ( const QString& filePath,
                             bool storeFile = true, bool generateThumbnail = true,
@@ -230,9 +237,29 @@ public:
   Q_INVOKABLE QString cachedTag (const QString sopInstanceUID, const QString tag);
   /// Insert an instance tag's value into to the cache
   Q_INVOKABLE bool cacheTag (const QString sopInstanceUID, const QString tag, const QString value);
+  /// Insert lists of tags into the cache as a batch query operation
+  Q_INVOKABLE bool cacheTags (const QStringList sopInstanceUIDs, const QStringList tags, const QStringList values);
 
 
 Q_SIGNALS:
+  /// Things inserted to database.
+  /// patientAdded arguments:
+  ///  - int: database index of patient (unique) within CTK database
+  ///  - QString: patient ID (not unique across institutions)
+  ///  - QString: patient Name (not unique)
+  ///  - QString: patient Birth Date (not unique)
+  void patientAdded(int, QString, QString, QString);
+  /// studyAdded arguments:
+  ///  - studyUID (unique)
+  void studyAdded(QString);
+  /// seriesAdded arguments:
+  ///  - seriesUID (unique)
+  void seriesAdded(QString);
+  /// instance UID is provided
+  /// instanceAdded arguments:
+  ///  - instanceUID (unique)
+  void instanceAdded(QString);
+  /// Indicates that an in-memory database has been updated
   void databaseChanged();
   /// Indicates that the schema is about to be updated and how many files will be processed
   void schemaUpdateStarted(int);

@@ -31,13 +31,14 @@
 #include "ctkVisualizationVTKWidgetsExport.h"
 
 class vtkDataSet;
-class vtkDataArray;
+class vtkAbstractArray;
 
 /// \ingroup Visualization_VTK_Widgets
 namespace ctkVTK
 {
  enum ItemDataRole {
-   PointerRole = Qt::UserRole + 1
+   PointerRole = Qt::UserRole + 1,
+   LocationRole,
  };
 };
 
@@ -52,10 +53,17 @@ class CTK_VISUALIZATION_VTK_WIDGETS_EXPORT ctkVTKDataSetModel
   QVTK_OBJECT
   Q_FLAGS(AttributeType AttributeTypes)
 
-  /// This property holds the type of attribute that should be listed in the model.s
+  /// This property holds the type of attribute that should be listed in the model.
   /// By default all attributes are considered.
   /// \sa ctkVTKDataSetModel::AllAttribute
   Q_PROPERTY(AttributeTypes attributeTypes READ attributeTypes WRITE setAttributeTypes)
+
+  /// This property allows adding a 'Null' item to the model, which is useful when
+  /// it is necessary to offer the user an option to not select any of the items
+  /// (for example, in a combo box there is always a selected item and it may be
+  /// necessary to allow the user to not select any of the attributes).
+  /// By default no 'Null' item is included.
+  Q_PROPERTY(bool includeNullItem READ includeNullItem WRITE setIncludeNullItem)
 
 public:
   typedef ctkVTKDataSetModel Self;
@@ -84,32 +92,53 @@ public:
   AttributeTypes attributeTypes()const;
   void setAttributeTypes(const AttributeTypes& attributeTypes);
 
-  /// Return the vtkDataArray associated to the index.
-  /// 0 if the index doesn't contain a vtkDataArray
-  inline vtkDataArray* arrayFromIndex(const QModelIndex& arrayIndex)const;
-  vtkDataArray* arrayFromItem(QStandardItem* nodeItem)const;
-  inline QModelIndex indexFromArray(vtkDataArray* dataArray, int column = 0)const;
-  QStandardItem* itemFromArray(vtkDataArray* dataArray, int column = 0)const;
-  QModelIndexList indexes(vtkDataArray* dataArray)const;
+  bool includeNullItem()const;
+  void setIncludeNullItem(bool includeNullItem);
+  int nullItemLocation()const;
+
+  /// Return the vtkAbstractArray associated to the index.
+  /// 0 if the index doesn't contain a vtkAbstractArray
+  inline vtkAbstractArray* arrayFromIndex(const QModelIndex& arrayIndex)const;
+
+  /// Return the location from a given item. Fails and returns -1 if either
+  /// the given index points to a null item or an invisible item.
+  /// \sa locationFromItem()
+  inline int locationFromIndex(const QModelIndex& arrayIndex)const;
+
+  vtkAbstractArray* arrayFromItem(QStandardItem* nodeItem)const;
+
+  /// Return the location from a given item. Fails and returns -1 if either
+  /// the given item is null or should be invisible).
+  /// \sa locationFromIndex(), invisibleRootItem()
+  int locationFromItem(QStandardItem* nodeItem)const;
+
+  inline QModelIndex indexFromArray(vtkAbstractArray* array, int column = 0)const;
+  QStandardItem* itemFromArray(vtkAbstractArray* array, int column = 0)const;
+  QModelIndexList indexes(vtkAbstractArray* array)const;
 
 protected Q_SLOTS:
   void onDataSetModified(vtkObject* dataSet);
-  void onArrayModified(vtkObject* dataArray);
+  void onDataSetPointDataModified(vtkObject* dataSetPointData);
+  void onDataSetCellDataModified(vtkObject* dataSetCellData);
+  void onArrayModified(vtkObject* array);
   void onItemChanged(QStandardItem * item);
 
 protected:
 
   ctkVTKDataSetModel(ctkVTKDataSetModelPrivate* pimpl, QObject *parent=0);
 
-  virtual void insertArray(vtkDataArray* dataArray);
-  virtual void insertArray(vtkDataArray* dataArray, int row);
-  virtual void updateItemFromArray(QStandardItem* item, vtkDataArray* dataArray, int column);
-  virtual void updateArrayFromItem(vtkDataArray* dataArray, QStandardItem* item);
+  virtual void insertArray(vtkAbstractArray* array, int location);
+  virtual void insertArray(vtkAbstractArray* array, int location, int row);
+  virtual void updateItemFromArray(QStandardItem* item, vtkAbstractArray* array, int location, int column);
+  virtual void updateArrayFromItem(vtkAbstractArray* array, QStandardItem* item);
   virtual void updateDataSet();
   virtual void populateDataSet();
+  virtual void insertNullItem();
+  virtual void removeNullItem();
 
 protected:
   QScopedPointer<ctkVTKDataSetModelPrivate> d_ptr;
+  int NullItemLocation;
 
 private:
   Q_DECLARE_PRIVATE(ctkVTKDataSetModel);
@@ -118,15 +147,21 @@ private:
 Q_DECLARE_OPERATORS_FOR_FLAGS(ctkVTKDataSetModel::AttributeTypes);
 
 // -----------------------------------------------------------------------------
-vtkDataArray* ctkVTKDataSetModel::arrayFromIndex(const QModelIndex &nodeIndex)const
+vtkAbstractArray* ctkVTKDataSetModel::arrayFromIndex(const QModelIndex &nodeIndex)const
 {
   return this->arrayFromItem(this->itemFromIndex(nodeIndex));
 }
 
 // -----------------------------------------------------------------------------
-QModelIndex ctkVTKDataSetModel::indexFromArray(vtkDataArray* dataArray, int column)const
+int ctkVTKDataSetModel::locationFromIndex(const QModelIndex &nodeIndex)const
 {
-  QStandardItem* item = this->itemFromArray(dataArray, column);
+  return this->locationFromItem(this->itemFromIndex(nodeIndex));
+}
+
+// -----------------------------------------------------------------------------
+QModelIndex ctkVTKDataSetModel::indexFromArray(vtkAbstractArray* array, int column)const
+{
+  QStandardItem* item = this->itemFromArray(array, column);
   return item ? item->index() : QModelIndex();
 }
 

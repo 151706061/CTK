@@ -22,12 +22,19 @@
 #include "ctkPluginFrameworkFactory.h"
 
 #include "ctkPluginFrameworkContext_p.h"
+#include "ctkPluginFrameworkProperties_p.h"
+#include "ctkLocationManager_p.h"
 
 //----------------------------------------------------------------------------
 ctkPluginFrameworkFactory::ctkPluginFrameworkFactory(const ctkProperties& initProps)
-  : fwCtx(new ctkPluginFrameworkContext(initProps))
+  : fwCtx(NULL)
 {
+  ctkPluginFrameworkProperties::setProperties(initProps);
+  ctkPluginFrameworkProperties::initializeProperties();
 
+  ctkLocationManager::initializeLocations();
+
+  fwCtx = new ctkPluginFrameworkContext();
 }
 
 //----------------------------------------------------------------------------

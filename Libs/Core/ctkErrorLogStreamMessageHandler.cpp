@@ -21,8 +21,10 @@
 // Qt includes
 #include <QMutexLocker>
 #include <QThread>
+#include <QHash>
 
 // CTK includes
+#include "ctkErrorLogContext.h"
 #include "ctkErrorLogStreamMessageHandler.h"
 #include "ctkUtils.h"
 
@@ -61,6 +63,7 @@ private:
 
   ctkErrorLogStreamMessageHandler * MessageHandler;
   ctkErrorLogLevel::LogLevel LogLevel;
+  ctkErrorLogContext LogContext;
 
   bool Enabled;
 
@@ -136,7 +139,8 @@ std::streambuf::int_type ctkStreamHandler::overflow(std::streambuf::int_type v)
     Q_ASSERT(this->MessageHandler);
     this->MessageHandler->handleMessage(
           ctk::qtHandleToString(QThread::currentThreadId()), this->LogLevel,
-          this->MessageHandler->handlerPrettyName(), this->currentBuffer()->c_str());
+          this->MessageHandler->handlerPrettyName(),
+          ctkErrorLogContext(this->currentBuffer()->c_str()), this->currentBuffer()->c_str());
     this->currentBuffer()->erase(this->currentBuffer()->begin(), this->currentBuffer()->end());
     }
   else
@@ -163,7 +167,8 @@ std::streamsize ctkStreamHandler::xsputn(const char *p, std::streamsize n)
       Q_ASSERT(this->MessageHandler);
       this->MessageHandler->handleMessage(
             ctk::qtHandleToString(QThread::currentThreadId()), this->LogLevel,
-            this->MessageHandler->handlerPrettyName(), tmp.c_str());
+            this->MessageHandler->handlerPrettyName(),
+            ctkErrorLogContext(tmp.c_str()), tmp.c_str());
       this->currentBuffer()->erase(this->currentBuffer()->begin(), this->currentBuffer()->begin() + pos + 1);
       }
     }

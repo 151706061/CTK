@@ -28,9 +28,13 @@ private:
 
 private Q_SLOTS:
 
+  void testDefaults();
+
   void testIsPythonInitialized();
 
   void testSetInitializationFlags();
+
+  void testSetSystemExitExceptionHandlerEnabled();
 
   void testPythonErrorOccured();
   void testPythonErrorOccured_data();
@@ -51,7 +55,27 @@ private Q_SLOTS:
   void testExecuteFile_data();
 
   //void testPythonAttributes(); // TODO
+
+  void testPythonModule();
+  void testPythonModule_data();
+
+  void testPythonObject();
+  void testPythonObject_data();
 };
+
+Q_DECLARE_METATYPE(PyObject*)
+
+// ----------------------------------------------------------------------------
+void ctkAbstractPythonManagerTester::testDefaults()
+{
+  QCOMPARE(this->PythonManager.pythonErrorOccured(), false);
+
+  this->PythonManager.resetErrorFlag();
+  this->PythonManager.registerPythonQtDecorator(0);
+  this->PythonManager.registerClassForPythonQt(0);
+  this->PythonManager.registerCPPClassForPythonQt(0);
+  this->PythonManager.addWrapperFactory(0);
+}
 
 // ----------------------------------------------------------------------------
 void ctkAbstractPythonManagerTester::testIsPythonInitialized()
@@ -82,15 +106,27 @@ void ctkAbstractPythonManagerTester::testSetInitializationFlags()
 }
 
 // ----------------------------------------------------------------------------
+void ctkAbstractPythonManagerTester::testSetSystemExitExceptionHandlerEnabled()
+{
+  QCOMPARE(this->PythonManager.systemExitExceptionHandlerEnabled(), false);
+  this->PythonManager.setSystemExitExceptionHandlerEnabled(true);
+  QCOMPARE(this->PythonManager.systemExitExceptionHandlerEnabled(), true);
+}
+
+// ----------------------------------------------------------------------------
 void ctkAbstractPythonManagerTester::testInitialize()
 {
   QVERIFY(this->PythonManager.initialize());
+
+  this->testDefaults();
 }
 
 // ----------------------------------------------------------------------------
 void ctkAbstractPythonManagerTester::testMainContext()
 {
   QVERIFY(this->PythonManager.mainContext());
+
+  this->testDefaults();
 }
 
 // ----------------------------------------------------------------------------
@@ -102,6 +138,11 @@ void ctkAbstractPythonManagerTester::testPythonErrorOccured()
   this->PythonManager.executeString(pythonCode);
 
   QCOMPARE(this->PythonManager.pythonErrorOccured(), errorOccured);
+
+  if(errorOccured)
+    {
+    this->PythonManager.resetErrorFlag();
+    }
 }
 
 // ----------------------------------------------------------------------------
@@ -112,7 +153,7 @@ void ctkAbstractPythonManagerTester::testPythonErrorOccured_data()
 
   QTest::newRow("0") << QString("2 + 2") << false;
 
-  QTest::newRow("1") << QString("raise Exception('This is exception is expected')") << true;
+  QTest::newRow("1") << QString("raise Exception('This exception is expected')") << true;
 }
 
 // ----------------------------------------------------------------------------
@@ -123,6 +164,7 @@ void ctkAbstractPythonManagerTester::testAddObjectToPythonMain()
   this->PythonManager.addObjectToPythonMain("testAddObjectToPythonMain", object);
   QVariant returnValue = this->PythonManager.executeString("testAddObjectToPythonMain.happy",
                                                            ctkAbstractPythonManager::EvalInput);
+  this->PythonManager.resetErrorFlag();
   QCOMPARE(returnValue, QVariant(true));
 }
 
@@ -131,6 +173,7 @@ void ctkAbstractPythonManagerTester::testExecuteString()
 {
   QFETCH(QString, stringToExecute);
   QFETCH(int, executeStringMode);
+  QFETCH(bool, errorOccured);
   QFETCH(QVariant, expectedReturnValue);
   QFETCH(QString, expectedVariableName);
   QFETCH(QVariant, expectedVariableValue);
@@ -139,6 +182,12 @@ void ctkAbstractPythonManagerTester::testExecuteString()
         stringToExecute,
         static_cast<ctkAbstractPythonManager::ExecuteStringMode>(executeStringMode));
 
+  QCOMPARE(this->PythonManager.pythonErrorOccured(), errorOccured);
+  if (errorOccured)
+    {
+    this->PythonManager.resetErrorFlag();
+    return;
+    }
   QCOMPARE(returnValue, expectedReturnValue);
   QCOMPARE(this->PythonManager.getVariable(expectedVariableName), expectedVariableValue);
 }
@@ -148,25 +197,41 @@ void ctkAbstractPythonManagerTester::testExecuteString_data()
 {
   QTest::addColumn<QString>("stringToExecute");
   QTest::addColumn<int>("executeStringMode");
+  QTest::addColumn<bool>("errorOccured");
   QTest::addColumn<QVariant>("expectedReturnValue");
   QTest::addColumn<QString>("expectedVariableName");
   QTest::addColumn<QVariant>("expectedVariableValue");
 
   QTest::newRow("0") << QString("a = 6542")
                      << static_cast<int>(ctkAbstractPythonManager::FileInput)
+                     << false
                      << QVariant() << QString("a") << QVariant(6542);
 
   QTest::newRow("1") << QString("6543")
                      << static_cast<int>(ctkAbstractPythonManager::FileInput)
+                     << false
                      << QVariant() << QString("a") << QVariant(6542);
 
   QTest::newRow("2") << QString("b = 6544")
                      << static_cast<int>(ctkAbstractPythonManager::EvalInput)
+                     << true
                      << QVariant() << QString("b") << QVariant();
 
   QTest::newRow("3") << QString("7")
                      << static_cast<int>(ctkAbstractPythonManager::EvalInput)
+                     << false
                      << QVariant(7) << QString("b") << QVariant();
+
+  QTest::newRow("4") << QString("sys.getrecursionlimit()")
+                     << static_cast<int>(ctkAbstractPythonManager::FileInput)
+                     << false
+                     << QVariant() << QString() << QVariant();
+
+  // This assume the default 'recursionlimit' has not been changed
+  QTest::newRow("5") << QString("sys.getrecursionlimit()")
+                     << static_cast<int>(ctkAbstractPythonManager::EvalInput)
+                     << false
+                     << QVariant(1000) << QString() << QVariant();
 }
 
 // ----------------------------------------------------------------------------
@@ -203,6 +268,98 @@ void ctkAbstractPythonManagerTester::testExecuteFile_data()
 
   QTest::newRow("3-check __file__ attribute") << QString("print 'This file is: %s' % __file__")
                      << false;
+}
+
+// ----------------------------------------------------------------------------
+void ctkAbstractPythonManagerTester::testPythonModule()
+{
+  QFETCH(QString, pythonCode);
+  QFETCH(QString, inputModuleList);
+  QFETCH(QString, expectedReturnedString);
+
+  this->PythonManager.executeString(pythonCode);
+  PyObject* returnedPyObject = this->PythonManager.pythonModule(inputModuleList);
+  PyObject* returnedPyString;
+  if(returnedPyObject)
+    {
+    returnedPyString = PyObject_GetAttrString(returnedPyObject, "__name__");
+    }
+  else
+    {
+    returnedPyString = PyString_FromString("");
+    }
+  QString returnedString = PyString_AsString(returnedPyString);
+  QCOMPARE(returnedString, expectedReturnedString);
+}
+
+// ----------------------------------------------------------------------------
+void ctkAbstractPythonManagerTester::testPythonModule_data()
+{
+  QTest::addColumn<QString>("pythonCode");
+  QTest::addColumn<QString>("inputModuleList");
+  QTest::addColumn<QString>("expectedReturnedString");
+
+  QTest::newRow("0") << ""
+                     << "__main__"
+                     << "__main__";
+
+  QTest::newRow("1") << ""
+                     << "__main__.__builtins__"
+                     << "__builtin__";
+
+  QTest::newRow("2") << "class foo: pass"
+                     << "__main__.foo"
+                     << "foo";
+
+  QTest::newRow("3") << ""
+                     << "__main__.NOT_A_MODULE"
+                     << "";
+}
+
+//-----------------------------------------------------------------------------
+void ctkAbstractPythonManagerTester::testPythonObject()
+{
+  QFETCH(QString, pythonCode);
+  QFETCH(QString, inputPythonVariableNameAndFunction);
+  QFETCH(QString, expectedReturnedString);
+
+  this->PythonManager.executeString(pythonCode);
+  PyObject* returnedPyObject = this->PythonManager.pythonObject(inputPythonVariableNameAndFunction);
+  PyObject* returnedPyObjectString;
+  if (returnedPyObject)
+    {
+    returnedPyObjectString = PyObject_GetAttrString(returnedPyObject, "__name__");
+    }
+  else
+    {
+    returnedPyObjectString = PyString_FromString("");
+    }
+  QString returnedString = PyString_AsString(returnedPyObjectString);
+  QCOMPARE(returnedString, expectedReturnedString);
+}
+
+//-----------------------------------------------------------------------------
+void ctkAbstractPythonManagerTester::testPythonObject_data()
+{
+  QTest::addColumn<QString>("pythonCode");
+  QTest::addColumn<QString>("inputPythonVariableNameAndFunction");
+  QTest::addColumn<QString>("expectedReturnedString");
+
+  QTest::newRow("0") << "foo = []"
+                     << "__main__.foo.append"
+                     << "append";
+
+  QTest::newRow("1") << ""
+                     << "__main__.__builtins__.dir"
+                     << "dir";
+
+  QTest::newRow("2") << "class foo: bar = []"
+                     << "__main__.foo.bar.reverse"
+                     << "reverse";
+
+  QTest::newRow("3") << ""
+                     << "__main__.__builtins__.NOT_A_FUNCTION"
+                     << "";
 }
 
 // ----------------------------------------------------------------------------

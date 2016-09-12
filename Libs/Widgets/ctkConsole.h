@@ -80,6 +80,9 @@ class CTK_WIDGETS_EXPORT ctkConsole : public QWidget
   Q_PROPERTY(EditorHints editorHints READ editorHints WRITE setEditorHints)
   Q_ENUMS(Qt::ScrollBarPolicy)
   Q_PROPERTY(Qt::ScrollBarPolicy scrollBarPolicy READ scrollBarPolicy WRITE setScrollBarPolicy)
+  Q_PROPERTY(QList<QKeySequence> completerShortcuts READ completerShortcuts WRITE setCompleterShortcuts)
+  Q_FLAGS(RunFileOption RunFileOptions)
+  Q_PROPERTY(RunFileOptions runFileOptions READ runFileOptions WRITE setRunFileOptions)
   
 public:
 
@@ -91,6 +94,14 @@ public:
     SplitCopiedTextByLine = 0x4  /*!< Copied text is split by lines and each one is executed (expected the last one) */
   };
   Q_DECLARE_FLAGS(EditorHints, EditorHint)
+
+  enum RunFileOption
+  {
+    NoRunFileUserInterface = 0x00,
+    RunFileButton = 0x01,   /*!< Show a button at the bottom of the console to run a file */
+    RunFileShortcut = 0x02, /*!< Add the shortcut CTRL+r to run a file */
+  };
+  Q_DECLARE_FLAGS(RunFileOptions, RunFileOption)
 
   ctkConsole(QWidget* parentObject = 0);
   typedef QWidget Superclass;
@@ -175,6 +186,27 @@ public:
 
   static QString stdInRedirectCallBack(void * callData);
 
+  /// Get the list of shortcuts that trigger the completion options.
+  /// \sa setCompleterShortcuts(), addCompleterShortcut()
+  QList<QKeySequence> completerShortcuts()const;
+
+  /// Set the list of shortcuts showing the completion options.
+  /// Default is simply Qt::Key_Tab.
+  /// \sa completerShortcuts(), addCompleterShortcut()
+  void setCompleterShortcuts(const QList<QKeySequence>& keys);
+
+  /// Convenience method to add a key sequence to the list of shortcuts that
+  /// show the completion options.
+  /// \sa completerShortcuts(), setCompleterShortcuts()
+  void addCompleterShortcut(const QKeySequence& key);
+
+  RunFileOptions runFileOptions()const;
+
+  /// Set which options to run file are enabled.
+  /// Default is RunFileShortcut.
+  /// \sa runFileOptions()
+  void setRunFileOptions(const RunFileOptions& newOptions);
+
 Q_SIGNALS:
 
   /// This signal emitted before and after a command is executed
@@ -190,7 +222,20 @@ public Q_SLOTS:
   virtual void reset();
 
   /// Exec the contents of the last console line
+  /// \sa openFile(), runFile(QString)
   virtual void exec(const QString&);
+
+  /// Exec line by line the content of a file.
+  /// \sa openFile(), exec()
+  virtual void runFile(const QString& filePath);
+
+  /// Open a file dialog to select a file and run it.
+  /// Shortcut: CTRL+O
+  /// \sa runFile(QString), exec()
+  virtual void runFile();
+
+  /// Print the console help with shortcuts.
+  virtual void printHelp();
 
 protected:
 
@@ -221,6 +266,10 @@ public:
   /// is the current console text between the cursor and the start of
   /// the line.
   virtual void updateCompletionModel(const QString& str) = 0;
+
+  /// Given the current completion, returns the number by which the
+  /// cursor should be shifted to the left.
+  virtual int cursorOffset(const QString& completion) = 0;
 
   /// Returns the autocomplete preference list
   QStringList autocompletePreferenceList();

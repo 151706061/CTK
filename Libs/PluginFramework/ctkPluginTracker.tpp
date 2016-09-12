@@ -55,7 +55,7 @@ void ctkPluginTracker<T>::open()
       return;
     }
 
-    if (d->DEBUG)
+    if (d->DEBUG_FLAG)
     {
       qDebug() << "ctkPluginTracker<T>::open";
     }
@@ -100,7 +100,7 @@ void ctkPluginTracker<T>::close()
       return;
     }
 
-    if (d->DEBUG)
+    if (d->DEBUG_FLAG)
     {
       qDebug() << "ctkPluginTracker<T>::close";
     }
@@ -143,7 +143,7 @@ T ctkPluginTracker<T>::getObject(QSharedPointer<ctkPlugin> plugin) const
   QSharedPointer<TrackedPlugin> t = d->tracked();
   if (t.isNull())
   {
-    return QVariant();
+    return T();
   }
 
   {
@@ -220,6 +220,7 @@ QMap<QSharedPointer<ctkPlugin>, T> ctkPluginTracker<T>::getTracked() const
 template<class T>
 bool ctkPluginTracker<T>::isEmpty() const
 {
+  Q_D(const PluginTracker);
   QSharedPointer<TrackedPlugin> t = d->tracked();
   if (t.isNull())
   { /* if PluginTracker is not open */

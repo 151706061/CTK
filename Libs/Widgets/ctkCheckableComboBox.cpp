@@ -21,7 +21,6 @@
 // Qt includes
 #include <QApplication>
 #include <QAbstractItemView>
-#include <QCleanlooksStyle>
 #include <QDebug>
 #include <QDesktopWidget>
 #include <QItemDelegate>
@@ -343,6 +342,13 @@ Qt::CheckState ctkCheckableComboBox::checkState(const QModelIndex& index)const
 {
   Q_D(const ctkCheckableComboBox);
   return d->CheckableModelHelper->checkState(index);
+}
+
+//-----------------------------------------------------------------------------
+ctkCheckableModelHelper* ctkCheckableComboBox::checkableModelHelper()const
+{
+  Q_D(const ctkCheckableComboBox);
+  return d->CheckableModelHelper;
 }
 
 //-----------------------------------------------------------------------------

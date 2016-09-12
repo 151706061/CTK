@@ -29,12 +29,15 @@
 #include "ctkLogger.h"
 
 // VTK includes
+#include <vtkOpenGLRenderWindow.h>
 #include <vtkRendererCollection.h>
 #include <vtkRenderWindowInteractor.h>
 #include <vtkTextProperty.h>
 
 //--------------------------------------------------------------------------
 static ctkLogger logger("org.commontk.visualization.vtk.widgets.ctkVTKAbstractView");
+//--------------------------------------------------------------------------
+int ctkVTKAbstractViewPrivate::MultiSamples = 0;  // Default for static var
 //--------------------------------------------------------------------------
 
 // --------------------------------------------------------------------------
@@ -97,9 +100,13 @@ void ctkVTKAbstractViewPrivate::setupRendering()
 {
   Q_ASSERT(this->RenderWindow);
   this->RenderWindow->SetAlphaBitPlanes(1);
-  this->RenderWindow->SetMultiSamples(0);
+  int nSamples = ctkVTKAbstractView::multiSamples();
+  if (nSamples < 0)
+    {
+    nSamples = vtkOpenGLRenderWindow::GetGlobalMaximumNumberOfMultiSamples();
+    }
+  this->RenderWindow->SetMultiSamples(nSamples);
   this->RenderWindow->StereoCapableWindowOn();
-
   this->VTKWidget->SetRenderWindow(this->RenderWindow);
 }
 
@@ -433,4 +440,43 @@ void ctkVTKAbstractView::updateFPS()
   QString fpsString = tr("FPS: %1(%2s)").arg(d->FPS).arg(lastRenderTime);
   d->FPS = 0;
   d->CornerAnnotation->SetText(1, fpsString.toLatin1());
+}
+
+//----------------------------------------------------------------------------
+bool ctkVTKAbstractView::useDepthPeeling()const
+{
+  Q_D(const ctkVTKAbstractView);
+  vtkRenderer* renderer = d->firstRenderer();
+  return renderer ? static_cast<bool>(renderer->GetUseDepthPeeling()):0;
+}
+
+//----------------------------------------------------------------------------
+void ctkVTKAbstractView::setUseDepthPeeling(bool useDepthPeeling)
+{
+  Q_D(ctkVTKAbstractView);
+  vtkRenderer* renderer = d->firstRenderer();
+  if (!renderer)
+    {
+    return;
+    }
+  this->renderWindow()->SetAlphaBitPlanes( useDepthPeeling ? 1 : 0);
+  int nSamples = ctkVTKAbstractView::multiSamples();
+  if (nSamples < 0)
+    {
+    nSamples = vtkOpenGLRenderWindow::GetGlobalMaximumNumberOfMultiSamples();
+    }
+  this->renderWindow()->SetMultiSamples(useDepthPeeling ? 0 : nSamples);
+  renderer->SetUseDepthPeeling(useDepthPeeling ? 1 : 0);
+}
+
+//----------------------------------------------------------------------------
+int ctkVTKAbstractView::multiSamples()
+{
+  return ctkVTKAbstractViewPrivate::MultiSamples;
+}
+
+//----------------------------------------------------------------------------
+void ctkVTKAbstractView::setMultiSamples(int number)
+{
+  ctkVTKAbstractViewPrivate::MultiSamples = number;
 }

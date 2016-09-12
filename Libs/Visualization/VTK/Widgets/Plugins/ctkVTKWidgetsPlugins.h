@@ -28,6 +28,7 @@
 #include "ctkVisualizationVTKWidgetsPluginsExport.h"
 #include "ctkVTKDataSetArrayComboBoxPlugin.h"
 #include "ctkVTKMagnifyViewPlugin.h"
+#include "ctkVTKPropertyWidgetPlugin.h"
 #include "ctkVTKRenderViewPlugin.h"
 #include "ctkVTKScalarBarWidgetPlugin.h"
 #ifdef CTK_USE_CHARTS
@@ -42,11 +43,14 @@
 #include "ctkVTKThresholdWidgetPlugin.h"
 
 /// \class Group the plugins in one library
-class CTK_VISUALIZATION_VTK_WIDGETS_PLUGINS_EXPORT ctkVTKWidgetsPlugins :
-  public QObject,
-  public QDesignerCustomWidgetCollectionInterface
+class CTK_VISUALIZATION_VTK_WIDGETS_PLUGINS_EXPORT ctkVTKWidgetsPlugins
+  : public QObject
+  , public QDesignerCustomWidgetCollectionInterface
 {
   Q_OBJECT
+#ifdef HAVE_QT5
+  Q_PLUGIN_METADATA(IID "org.commontk.VTKWidgets")
+#endif
   Q_INTERFACES(QDesignerCustomWidgetCollectionInterface);
 
 public:
@@ -55,6 +59,7 @@ public:
     QList<QDesignerCustomWidgetInterface *> plugins;
     plugins << new ctkVTKDataSetArrayComboBoxPlugin;
     plugins << new ctkVTKMagnifyViewPlugin;
+    plugins << new ctkVTKPropertyWidgetPlugin;
     plugins << new ctkVTKRenderViewPlugin;
     plugins << new ctkVTKScalarBarWidgetPlugin;
 #ifdef CTK_USE_CHARTS
