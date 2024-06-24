@@ -123,6 +123,8 @@ OFCondition ctkDICOMStorageListenerSCUPrivate::handleIncomingCommand(T_DIMSE_Mes
       reqDataset->findAndGetOFString(DCM_SeriesInstanceUID, seriesUID);
       OFString studyUID;
       reqDataset->findAndGetOFString(DCM_StudyInstanceUID, studyUID);
+      OFString patientID;
+      reqDataset->findAndGetOFString(DCM_PatientID, patientID);
       emit this->listener->progress(
           ctkDICOMStorageListener::tr("Got STORE request for %1").arg(instanceUID.c_str()));
       emit this->listener->progress(0);
@@ -131,6 +133,7 @@ OFCondition ctkDICOMStorageListenerSCUPrivate::handleIncomingCommand(T_DIMSE_Mes
         QSharedPointer<ctkDICOMJobResponseSet> jobResponseSet =
             QSharedPointer<ctkDICOMJobResponseSet>(new ctkDICOMJobResponseSet);
         jobResponseSet->setJobType(ctkDICOMJobResponseSet::JobType::StoreSOPInstance);
+        jobResponseSet->setPatientID(patientID.c_str());
         jobResponseSet->setStudyInstanceUID(studyUID.c_str());
         jobResponseSet->setSeriesInstanceUID(seriesUID.c_str());
         jobResponseSet->setSOPInstanceUID(instanceUID.c_str());
@@ -268,6 +271,14 @@ ctkDICOMStorageListener::~ctkDICOMStorageListener()
 }
 
 //------------------------------------------------------------------------------
+CTK_SET_CPP(ctkDICOMStorageListener, const QString&, setAETitle, AETitle);
+CTK_GET_CPP(ctkDICOMStorageListener, QString, AETitle, AETitle)
+CTK_SET_CPP(ctkDICOMStorageListener, const int&, setPort, Port);
+CTK_GET_CPP(ctkDICOMStorageListener, int, port, Port)
+CTK_SET_CPP(ctkDICOMStorageListener, const QString&, setJobUID, JobUID);
+CTK_GET_CPP(ctkDICOMStorageListener, QString, jobUID, JobUID)
+
+//------------------------------------------------------------------------------
 bool ctkDICOMStorageListener::listen()
 {
   Q_D(ctkDICOMStorageListener);
@@ -320,36 +331,8 @@ bool ctkDICOMStorageListener::initializeSCU()
   return true;
 }
 
-//------------------------------------------------------------------------------
-void ctkDICOMStorageListener::setAETitle(const QString& AETitle)
-{
-  Q_D(ctkDICOMStorageListener);
-  d->AETitle = AETitle;
-}
-
-//------------------------------------------------------------------------------
-QString ctkDICOMStorageListener::AETitle() const
-{
-  Q_D(const ctkDICOMStorageListener);
-  return d->AETitle;
-}
-
-//------------------------------------------------------------------------------
-void ctkDICOMStorageListener::setPort(int port)
-{
-  Q_D(ctkDICOMStorageListener);
-  d->Port = port;
-}
-
-//------------------------------------------------------------------------------
-int ctkDICOMStorageListener::port() const
-{
-  Q_D(const ctkDICOMStorageListener);
-  return d->Port;
-}
-
 //-----------------------------------------------------------------------------
-void ctkDICOMStorageListener::setConnectionTimeout(int timeout)
+void ctkDICOMStorageListener::setConnectionTimeout(const int& timeout)
 {
   Q_D(ctkDICOMStorageListener);
   d->SCU.setACSETimeout(timeout);
@@ -357,7 +340,7 @@ void ctkDICOMStorageListener::setConnectionTimeout(int timeout)
 }
 
 //-----------------------------------------------------------------------------
-int ctkDICOMStorageListener::connectionTimeout()
+int ctkDICOMStorageListener::connectionTimeout() const
 {
   Q_D(const ctkDICOMStorageListener);
   return d->SCU.getConnectionTimeout();
@@ -409,18 +392,4 @@ void ctkDICOMStorageListener::removeJobResponseSet(QSharedPointer<ctkDICOMJobRes
 {
   Q_D(ctkDICOMStorageListener);
   d->JobResponseSets.removeOne(jobResponseSet);
-}
-
-//------------------------------------------------------------------------------
-void ctkDICOMStorageListener::setJobUID(const QString& jobUID)
-{
-  Q_D(ctkDICOMStorageListener);
-  d->JobUID = jobUID;
-}
-
-//------------------------------------------------------------------------------
-QString ctkDICOMStorageListener::jobUID() const
-{
-  Q_D(const ctkDICOMStorageListener);
-  return d->JobUID;
 }

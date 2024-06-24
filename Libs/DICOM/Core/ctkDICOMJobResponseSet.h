@@ -88,14 +88,15 @@ public:
     RetrieveSeries,
     RetrieveSOPInstance,
     StoreSOPInstance,
-    Inserter
+    Inserter,
+    Echo
   };
   void setJobType(JobType jobType);
   JobType jobType() const;
   ///@}
 
   ///@{
-  /// Task UID
+  /// Job UID
   void setJobUID(const QString& jobUID);
   QString jobUID() const;
   ///@}

@@ -24,6 +24,7 @@
 // Qt includes
 #include <QMutex>
 #include <QSharedPointer>
+#include <QTimer>
 class QThreadPool;
 
 // ctkCore includes
@@ -44,7 +45,7 @@ protected:
   ctkJobScheduler* const q_ptr;
 
 Q_SIGNALS:
-  void queueJobs();
+  void queueJobsInThreadPool();
 
 public Q_SLOTS:
   virtual void onQueueJobsInThreadPool();
@@ -59,8 +60,10 @@ public:
   virtual bool insertJob(QSharedPointer<ctkAbstractJob> job);
   virtual bool removeJob(const QString& jobUID);
   virtual void removeJobs(const QStringList& jobUIDs);
+  virtual void removeAllJobs();
   int getSameTypeJobsInThreadPoolQueueOrRunning(QSharedPointer<ctkAbstractJob> job);
   QString generateUniqueJobUID();
+  void clearBactchedJobsLists();
 
   QMutex QueueMutex;
 
@@ -70,7 +73,17 @@ public:
 
   QSharedPointer<QThreadPool> ThreadPool;
   QMap<QString, QSharedPointer<ctkAbstractJob>> JobsQueue;
+  QMap<QString, QMap<QString, QMetaObject::Connection>> JobsConnections;
   QMap<QString, QSharedPointer<ctkAbstractWorker>> Workers;
+  QList<QVariant> BatchedJobsStarted;
+  QList<QVariant> BatchedJobsUserStopped;
+  QList<QVariant> BatchedJobsFinished;
+  QList<QVariant> BatchedJobsAttemptFailed;
+  QList<QVariant> BatchedJobsFailed;
+  QList<QVariant> BatchedJobsProgress;
+  QSharedPointer<QTimer> ThrottleTimer;
+  int ThrottleTimeInterval{300};
+  int MaximumBatchedSignalsForTimeInterval{20};
 };
 
 #endif

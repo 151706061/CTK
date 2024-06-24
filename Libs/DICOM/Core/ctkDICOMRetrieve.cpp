@@ -21,6 +21,7 @@
 #include <stdexcept>
 
 // Qt includes
+#include <QMutex>
 
 // ctkDICOMCore includes
 #include "ctkDICOMRetrieve.h"
@@ -66,14 +67,23 @@ public:
                                          RetrieveResponse *response,
                                          OFBool &waitForNextResponse)
   {
-    if (this->retrieve && !this->retrieve->wasCanceled())
+    if (!this->retrieve)
     {
-      emit this->retrieve->progress(ctkDICOMRetrieve::tr("Got move request"));
-      emit this->retrieve->progress(0);
-      return this->DcmSCU::handleMOVEResponse(
-        presID, response, waitForNextResponse);
+      return EC_IllegalCall;
     }
-    return EC_IllegalCall;
+
+    if (this->retrieve->wasCanceled())
+    {
+      // send cancel can fail and be ignored (but DCMTK will report still good == true).
+      // Therefore, we need to force the release of the association to cancel the worker
+      this->retrieve->releaseAssociation();
+      return EC_IllegalCall;
+    }
+
+    emit this->retrieve->progress(ctkDICOMRetrieve::tr("Got move request"));
+    emit this->retrieve->progress(0);
+    return this->DcmSCU::handleMOVEResponse(
+      presID, response, waitForNextResponse);
   };
 
   // called when a data set is coming in from a server in
@@ -83,8 +93,16 @@ public:
                                          OFBool& continueCGETSession,
                                          Uint16& cStoreReturnStatus)
   {
-    if (!this->retrieve || this->retrieve->wasCanceled())
+    if (!this->retrieve)
     {
+      return EC_IllegalCall;
+    }
+
+    if (this->retrieve->wasCanceled())
+    {
+      // send cancel can fail and be ignored (but DCMTK will report still good == true).
+      // Therefore, we need to force the release of the association to cancel the worker
+      this->retrieve->releaseAssociation();
       return EC_IllegalCall;
     }
 
@@ -150,13 +168,22 @@ public:
                                          RetrieveResponse* response,
                                          OFBool& continueCGETSession)
   {
-    if (this->retrieve && !this->retrieve->wasCanceled())
+    if (!this->retrieve)
     {
-      emit this->retrieve->progress(ctkDICOMRetrieve::tr("Got CGET response"));
-      emit this->retrieve->progress(0);
-      return this->DcmSCU::handleCGETResponse(presID, response, continueCGETSession);
+      return EC_IllegalCall;
     }
-    return EC_IllegalCall;
+
+    if (this->retrieve->wasCanceled())
+    {
+      // send cancel can fail and be ignored (but DCMTK will report still good == true).
+      // Therefore, we need to force the release of the association to cancel the worker
+      this->retrieve->releaseAssociation();
+      return EC_IllegalCall;
+    }
+
+    emit this->retrieve->progress(ctkDICOMRetrieve::tr("Got CGET response"));
+    emit this->retrieve->progress(0);
+    return this->DcmSCU::handleCGETResponse(presID, response, continueCGETSession);
   };
 };
 
@@ -173,11 +200,16 @@ public:
   ctkDICOMRetrievePrivate(ctkDICOMRetrieve& obj);
   ~ctkDICOMRetrievePrivate();
 
-  /// Keep the currently negotiated connection to the
-  /// peer host open unless the connection parameters change
+  /// \warning: releaseAssociation is not a thread safe method.
+  /// If called concurrently from different threads DCMTK can crash.
+  /// Therefore use this method instead of calling directly SCU->releaseAssociation()
+  OFCondition releaseAssociation();
+
   bool Canceled;
   bool KeepAssociationOpen;
   bool ConnectionParamsChanged;
+  bool AssociationClosing;
+  QMutex AssociationMutex;
   ctkDICOMRetrieve::RetrieveType LastRetrieveType;
 
   QString PatientID;
@@ -222,6 +254,7 @@ ctkDICOMRetrievePrivate::ctkDICOMRetrievePrivate(ctkDICOMRetrieve& obj)
   this->Canceled = false;
   this->KeepAssociationOpen = true;
   this->ConnectionParamsChanged = false;
+  this->AssociationClosing = false;
   this->LastRetrieveType = ctkDICOMRetrieve::RetrieveNone;
 
   this->PatientID = "";
@@ -247,6 +280,7 @@ ctkDICOMRetrievePrivate::ctkDICOMRetrievePrivate(ctkDICOMRetrieve& obj)
   transferSyntaxes.push_back(UID_BigEndianExplicitTransferSyntax);
   transferSyntaxes.push_back(UID_LittleEndianImplicitTransferSyntax);
 
+  this->PresentationContext = 0;
   this->SCU = new ctkDICOMRetrieveSCUPrivate();
   this->SCU->addPresentationContext(
     UID_MOVEStudyRootQueryRetrieveInformationModel, transferSyntaxes);
@@ -269,9 +303,7 @@ ctkDICOMRetrievePrivate::~ctkDICOMRetrievePrivate()
 {
   if (this->SCU && this->SCU->isConnected())
   {
-    // Warning: releaseAssociation is not a thread safe method.
-    // If called concurrently from different threads DCMTK can crash.
-    this->SCU->releaseAssociation();
+    this->releaseAssociation();
   }
 
   if (this->SCU)
@@ -280,6 +312,28 @@ ctkDICOMRetrievePrivate::~ctkDICOMRetrievePrivate()
   }
 
   this->JobResponseSets.clear();
+}
+
+//------------------------------------------------------------------------------
+OFCondition ctkDICOMRetrievePrivate::releaseAssociation()
+{
+  OFCondition status = EC_IllegalCall;
+  if (!this->SCU)
+    {
+    return status;
+    }
+
+  QMutexLocker locker(&this->AssociationMutex);
+  if (this->AssociationClosing)
+  {
+    return status;
+  }
+
+  this->AssociationClosing = true;
+  status = this->SCU->releaseAssociation();
+  this->AssociationClosing = false;
+
+  return status;
 }
 
 //------------------------------------------------------------------------------
@@ -293,7 +347,7 @@ bool ctkDICOMRetrievePrivate::initializeSCU(const QString& patientID,
   // If we like to query another server than before, be sure to disconnect first
   if (this->SCU->isConnected() && this->ConnectionParamsChanged)
   {
-    this->SCU->releaseAssociation();
+    this->releaseAssociation();
   }
   // Connect to server if not already connected
   if (!this->SCU->isConnected())
@@ -400,14 +454,14 @@ bool ctkDICOMRetrievePrivate::move(const QString& patientID,
   logger.debug ( "Sending Move Request" );
   OFList<RetrieveResponse*> responses;
   this->PresentationContext = this->SCU->findPresentationContextID(
-                                UID_MOVEStudyRootQueryRetrieveInformationModel,
-                                "" /* don't care about transfer syntax */);
+    UID_MOVEStudyRootQueryRetrieveInformationModel,
+    "" /* don't care about transfer syntax */);
   if (this->PresentationContext == 0)
   {
     logger.error ( "MOVE Request failed: No valid Study Root MOVE Presentation Context available" );
     if (!this->KeepAssociationOpen)
     {
-      this->SCU->releaseAssociation();
+      this->releaseAssociation();
     }
     delete retrieveParameters;
     return false;
@@ -426,7 +480,7 @@ bool ctkDICOMRetrievePrivate::move(const QString& patientID,
   // Close association if we do not want to explicitly keep it open
   if (!this->KeepAssociationOpen)
   {
-    this->SCU->releaseAssociation();
+    this->releaseAssociation();
   }
   // Free some (little) memory
   delete retrieveParameters;
@@ -574,14 +628,14 @@ bool ctkDICOMRetrievePrivate::get(const QString& patientID,
   emit q->progress(0);
   OFList<RetrieveResponse*> responses;
   this->PresentationContext = this->SCU->findPresentationContextID(
-                                          UID_GETStudyRootQueryRetrieveInformationModel,
-                                          "" /* don't care about transfer syntax */ );
+    UID_GETStudyRootQueryRetrieveInformationModel,
+    "" /* don't care about transfer syntax */ );
   if (this->PresentationContext == 0)
   {
     logger.error ( "GET Request failed: No valid Study Root GET Presentation Context available" );
     if (!this->KeepAssociationOpen)
     {
-      this->SCU->releaseAssociation();
+      this->releaseAssociation();
     }
     delete retrieveParameters;
     return false;
@@ -604,7 +658,7 @@ bool ctkDICOMRetrievePrivate::get(const QString& patientID,
   // Close association if we do not want to explicitly keep it open
   if (!this->KeepAssociationOpen)
   {
-    this->SCU->releaseAssociation();
+    this->releaseAssociation();
   }
   // Free some (little) memory
   delete retrieveParameters;
@@ -709,18 +763,17 @@ ctkDICOMRetrieve::~ctkDICOMRetrieve()
 }
 
 //------------------------------------------------------------------------------
-void ctkDICOMRetrieve::setConnectionName(const QString &connectionName)
-{
-  Q_D(ctkDICOMRetrieve);
-  d->ConnectionName = connectionName;
-}
-
-//------------------------------------------------------------------------------
-QString ctkDICOMRetrieve::connectionName() const
-{
-  Q_D(const ctkDICOMRetrieve);
-  return d->ConnectionName;
-}
+CTK_SET_CPP(ctkDICOMRetrieve, const QString&, setConnectionName, ConnectionName);
+CTK_GET_CPP(ctkDICOMRetrieve, QString, connectionName, ConnectionName)
+CTK_GET_CPP(ctkDICOMRetrieve, QString, moveDestinationAETitle, MoveDestinationAETitle)
+CTK_SET_CPP(ctkDICOMRetrieve, const QString&, setJobUID, JobUID);
+CTK_GET_CPP(ctkDICOMRetrieve, QString, jobUID, JobUID)
+CTK_GET_CPP(ctkDICOMRetrieve, QString, patientID, PatientID)
+CTK_GET_CPP(ctkDICOMRetrieve, QString, studyInstanceUID, StudyInstanceUID)
+CTK_GET_CPP(ctkDICOMRetrieve, QString, seriesInstanceUID, SeriesInstanceUID)
+CTK_GET_CPP(ctkDICOMRetrieve, QString, sopInstanceUID, SOPInstanceUID)
+CTK_SET_CPP(ctkDICOMRetrieve, const bool, setKeepAssociationOpen, KeepAssociationOpen);
+CTK_GET_CPP(ctkDICOMRetrieve, bool, keepAssociationOpen, KeepAssociationOpen)
 
 //------------------------------------------------------------------------------
 void ctkDICOMRetrieve::setCallingAETitle(const QString& callingAETitle)
@@ -804,12 +857,6 @@ void ctkDICOMRetrieve::setMoveDestinationAETitle( const QString& moveDestination
     d->ConnectionParamsChanged = true;
   }
 }
-//------------------------------------------------------------------------------
-QString ctkDICOMRetrieve::moveDestinationAETitle()const
-{
-  Q_D(const ctkDICOMRetrieve);
-  return d->MoveDestinationAETitle;
-}
 
 //------------------------------------------------------------------------------
 static void skipDelete(QObject* obj)
@@ -888,66 +935,10 @@ void ctkDICOMRetrieve::removeJobResponseSet(QSharedPointer<ctkDICOMJobResponseSe
 }
 
 //------------------------------------------------------------------------------
-void ctkDICOMRetrieve::setJobUID(const QString &jobUID)
-{
-  Q_D(ctkDICOMRetrieve);
-  d->JobUID = jobUID;
-}
-
-//------------------------------------------------------------------------------
-QString ctkDICOMRetrieve::jobUID() const
-{
-  Q_D(const ctkDICOMRetrieve);
-  return d->JobUID;
-}
-
-//------------------------------------------------------------------------------
-QString ctkDICOMRetrieve::patientID() const
-{
-  Q_D(const ctkDICOMRetrieve);
-  return d->PatientID;
-}
-
-//------------------------------------------------------------------------------
-QString ctkDICOMRetrieve::studyInstanceUID() const
-{
-  Q_D(const ctkDICOMRetrieve);
-  return d->StudyInstanceUID;
-}
-
-//------------------------------------------------------------------------------
-QString ctkDICOMRetrieve::seriesInstanceUID() const
-{
-  Q_D(const ctkDICOMRetrieve);
-  return d->SeriesInstanceUID;
-}
-
-//------------------------------------------------------------------------------
-QString ctkDICOMRetrieve::sopInstanceUID() const
-{
-  Q_D(const ctkDICOMRetrieve);
-  return d->SOPInstanceUID;
-}
-
-//------------------------------------------------------------------------------
 ctkDICOMRetrieve::RetrieveType ctkDICOMRetrieve::getLastRetrieveType() const
 {
   Q_D(const ctkDICOMRetrieve);
   return d->LastRetrieveType;
-}
-
-//------------------------------------------------------------------------------
-void ctkDICOMRetrieve::setKeepAssociationOpen(const bool keepOpen)
-{
-  Q_D(ctkDICOMRetrieve);
-  d->KeepAssociationOpen = keepOpen;
-}
-
-//------------------------------------------------------------------------------
-bool ctkDICOMRetrieve::keepAssociationOpen() const
-{
-  Q_D(const ctkDICOMRetrieve);
-  return d->KeepAssociationOpen;
 }
 
 //-----------------------------------------------------------------------------
@@ -1083,4 +1074,11 @@ void ctkDICOMRetrieve::cancel()
     d->SCU->sendCANCELRequest(d->PresentationContext);
     d->PresentationContext = 0;
   }
+}
+
+//------------------------------------------------------------------------------
+void ctkDICOMRetrieve::releaseAssociation()
+{
+  Q_D(ctkDICOMRetrieve);
+  d->releaseAssociation();
 }

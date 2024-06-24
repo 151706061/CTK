@@ -34,7 +34,9 @@ class ctkDICOMScheduler;
 
 // ctkDICOMWidgets includes
 #include "ctkDICOMWidgetsExport.h"
+
 class ctkDICOMSeriesItemWidgetPrivate;
+class ctkDICOMStudyItemWidget;
 
 /// \ingroup DICOM_Widgets
 class CTK_DICOM_WIDGETS_EXPORT ctkDICOMSeriesItemWidget : public QWidget
@@ -49,13 +51,17 @@ class CTK_DICOM_WIDGETS_EXPORT ctkDICOMSeriesItemWidget : public QWidget
   Q_PROPERTY(QString seriesDescription READ seriesDescription WRITE setSeriesDescription);
   Q_PROPERTY(bool isCloud READ isCloud);
   Q_PROPERTY(bool retrieveFailed READ retrieveFailed WRITE setRetrieveFailed);
+  Q_PROPERTY(QString referenceSeriesInserterJobUID READ referenceSeriesInserterJobUID);
+  Q_PROPERTY(QString referenceInstanceInserterJobUID READ referenceInstanceInserterJobUID);
   Q_PROPERTY(int thumbnailSizePixel READ thumbnailSizePixel WRITE setThumbnailSizePixel);
   Q_PROPERTY(bool stopJobs READ stopJobs WRITE setStopJobs);
   Q_PROPERTY(bool raiseJobsPriority READ raiseJobsPriority WRITE setRaiseJobsPriority);
+  Q_PROPERTY(QStringList allowedServers READ allowedServers WRITE setAllowedServers);
 
 public:
   typedef QWidget Superclass;
-  explicit ctkDICOMSeriesItemWidget(QWidget* parent = nullptr);
+  explicit ctkDICOMSeriesItemWidget(QWidget* top = nullptr,
+                                    QWidget* parent = nullptr);
   virtual ~ctkDICOMSeriesItemWidget();
 
   ///@{
@@ -125,17 +131,30 @@ public:
   bool retrieveFailed() const;
   ///@}
 
+  ///@{
+  /// Return the referenceInserterJobUID
+  QString referenceSeriesInserterJobUID() const;
+  QString referenceInstanceInserterJobUID() const;
+  ///@}
+
   /// Series has been loaded by the parent widget
-  bool IsLoaded() const;
+  bool isLoaded() const;
 
   /// Series is visible in the parent widget
-  bool IsVisible() const;
+  bool isVisible() const;
 
   ///@{
   /// Set the thumbnail size in pixel
   /// 200 by default
   void setThumbnailSizePixel(int thumbnailSizePixel);
   int thumbnailSizePixel() const;
+  ///@}
+
+  ///@{
+  /// Allowed Servers
+  /// Empty by default
+  void setAllowedServers(const QStringList& allowedServers);
+  QStringList allowedServers() const;
   ///@}
 
   /// Return the scheduler.
@@ -161,13 +180,14 @@ public:
   void setDicomDatabase(QSharedPointer<ctkDICOMDatabase> dicomDatabase);
 
 public Q_SLOTS:
-  void generateInstances();
-  void updateGUIFromScheduler(const QVariant& data);
-  void updateSeriesProgressBar(const QVariant& data);
-  void onJobStarted(const QVariant& data);
-  void onJobCanceled(const QVariant& data);
-  void onJobFailed(const QVariant& data);
-  void onJobFinished(const QVariant& data);
+  void generateInstances(bool query = true, bool retrieve = true);
+  void updateGUIFromScheduler(const QVariant&);
+  void updateSeriesProgressBar(const QVariant&);
+  void onJobStarted(const QVariant&);
+  void onJobUserStopped(const QVariant&);
+  void onJobFailed(const QVariant&);
+  void onJobFinished(const QVariant&);
+  void onOperationStatusButtonClicked(bool);
 
 protected:
   QScopedPointer<ctkDICOMSeriesItemWidgetPrivate> d_ptr;

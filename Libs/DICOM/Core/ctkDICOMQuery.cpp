@@ -24,6 +24,7 @@
 #include <QDirIterator>
 #include <QFile>
 #include <QFileInfo>
+#include <QMutex>
 #include <QPair>
 #include <QSet>
 #include <QSqlQuery>
@@ -66,8 +67,16 @@ public:
                                          QRResponse *response,
                                          OFBool &waitForNextResponse)
   {
-    if (!this->query || this->query->wasCanceled())
+    if (!this->query)
     {
+      return EC_IllegalCall;
+    }
+
+    if (this->query->wasCanceled())
+    {
+      // send cancel can fail and be ignored (but DCMTK will report still good == true).
+      // Therefore, we need to force the release of the association to cancel the worker
+      this->query->releaseAssociation();
       return EC_IllegalCall;
     }
 
@@ -89,6 +98,11 @@ public:
   /// Add StudyInstanceUID and SeriesInstanceUID that may be further retrieved
   void addStudyAndSeriesInstanceUID( const QString& studyInstanceUID, const QString& seriesInstanceUID );
 
+  /// \warning: releaseAssociation is not a thread safe method.
+  /// If called concurrently from different threads DCMTK can crash.
+  /// Therefore use this method instead of calling directly SCU->releaseAssociation()
+  OFCondition releaseAssociation();
+
   QString ConnectionName;
   QString CallingAETitle;
   QString CalledAETitle;
@@ -101,6 +115,8 @@ public:
   QList<QPair<QString,QString>> StudyAndSeriesInstanceUIDPairList;
   QMap<QString, DcmDataset*> StudyDatasets;
   bool Canceled;
+  bool AssociationClosing;
+  QMutex AssociationMutex;
   int MaximumPatientsQuery;
   QString JobUID;
   QList<QSharedPointer<ctkDICOMJobResponseSet>> JobResponseSets;
@@ -113,11 +129,12 @@ public:
 ctkDICOMQueryPrivate::ctkDICOMQueryPrivate()
 {
   this->QueryDcmDataset = QSharedPointer<DcmDataset>(new DcmDataset);
-  this->PresentationContext = 0;
   this->Port = 0;
   this->Canceled = false;
+  this->AssociationClosing = false;
   this->MaximumPatientsQuery = 25;
 
+  this->PresentationContext = 0;
   this->SCU = new ctkDICOMQuerySCUPrivate();
   this->SCU->setACSETimeout(10);
   this->SCU->setConnectionTimeout(10);
@@ -128,9 +145,7 @@ ctkDICOMQueryPrivate::~ctkDICOMQueryPrivate()
 {
   if (this->SCU && this->SCU->isConnected())
   {
-    // Warning: releaseAssociation is not a thread safe method.
-    // If called concurrently from different threads DCMTK can crash.
-    this->SCU->releaseAssociation();
+    this->releaseAssociation();
   }
 
   if (this->SCU)
@@ -154,6 +169,28 @@ void ctkDICOMQueryPrivate::addStudyInstanceUIDAndDataset( const QString& studyIn
 }
 
 //------------------------------------------------------------------------------
+OFCondition ctkDICOMQueryPrivate::releaseAssociation()
+{
+  OFCondition status = EC_IllegalCall;
+  if (!this->SCU)
+  {
+    return status;
+  }
+
+  QMutexLocker locker(&this->AssociationMutex);
+  if (this->AssociationClosing)
+  {
+    return status;
+  }
+
+  this->AssociationClosing = true;
+  status = this->SCU->releaseAssociation();
+  this->AssociationClosing = false;
+
+  return status;
+}
+
+//------------------------------------------------------------------------------
 // ctkDICOMQuery methods
 
 //------------------------------------------------------------------------------
@@ -173,77 +210,23 @@ ctkDICOMQuery::~ctkDICOMQuery()
 }
 
 //------------------------------------------------------------------------------
-void ctkDICOMQuery::setConnectionName(const QString& connectionName)
-{
-  Q_D(ctkDICOMQuery);
-  d->ConnectionName = connectionName;
-}
-
-//------------------------------------------------------------------------------
-QString ctkDICOMQuery::connectionName() const
-{
-  Q_D(const ctkDICOMQuery);
-  return d->ConnectionName;
-}
-
-//------------------------------------------------------------------------------
-void ctkDICOMQuery::setCallingAETitle(const QString& callingAETitle)
-{
-  Q_D(ctkDICOMQuery);
-  d->CallingAETitle = callingAETitle;
-}
-
-//------------------------------------------------------------------------------
-QString ctkDICOMQuery::callingAETitle() const
-{
-  Q_D(const ctkDICOMQuery);
-  return d->CallingAETitle;
-}
-
-//------------------------------------------------------------------------------
-void ctkDICOMQuery::setCalledAETitle(const QString& calledAETitle)
-{
-  Q_D(ctkDICOMQuery);
-  d->CalledAETitle = calledAETitle;
-}
-
-//------------------------------------------------------------------------------
-QString ctkDICOMQuery::calledAETitle()const
-{
-  Q_D(const ctkDICOMQuery);
-  return d->CalledAETitle;
-}
-
-//------------------------------------------------------------------------------
-void ctkDICOMQuery::setHost(const QString& host)
-{
-  Q_D(ctkDICOMQuery);
-  d->Host = host;
-}
-
-//------------------------------------------------------------------------------
-QString ctkDICOMQuery::host() const
-{
-  Q_D(const ctkDICOMQuery);
-  return d->Host;
-}
-
-//------------------------------------------------------------------------------
-void ctkDICOMQuery::setPort(int port)
-{
-  Q_D(ctkDICOMQuery);
-  d->Port = port;
-}
-
-//------------------------------------------------------------------------------
-int ctkDICOMQuery::port()const
-{
-  Q_D(const ctkDICOMQuery);
-  return d->Port;
-}
+CTK_SET_CPP(ctkDICOMQuery, const QString&, setConnectionName, ConnectionName);
+CTK_GET_CPP(ctkDICOMQuery, QString, connectionName, ConnectionName)
+CTK_SET_CPP(ctkDICOMQuery, const QString&, setCallingAETitle, CallingAETitle);
+CTK_GET_CPP(ctkDICOMQuery, QString, callingAETitle, CallingAETitle)
+CTK_SET_CPP(ctkDICOMQuery, const QString&, setCalledAETitle, CalledAETitle);
+CTK_GET_CPP(ctkDICOMQuery, QString, calledAETitle, CalledAETitle)
+CTK_SET_CPP(ctkDICOMQuery, const QString&, setHost, Host);
+CTK_GET_CPP(ctkDICOMQuery, QString, host, Host)
+CTK_SET_CPP(ctkDICOMQuery, const int&, setPort, Port);
+CTK_GET_CPP(ctkDICOMQuery, int, port, Port)
+CTK_SET_CPP(ctkDICOMQuery, const int&, setMaximumPatientsQuery, MaximumPatientsQuery);
+CTK_GET_CPP(ctkDICOMQuery, int, maximumPatientsQuery, MaximumPatientsQuery);
+CTK_SET_CPP(ctkDICOMQuery, const QString&, setJobUID, JobUID);
+CTK_GET_CPP(ctkDICOMQuery, QString, jobUID, JobUID)
 
 //-----------------------------------------------------------------------------
-void ctkDICOMQuery::setConnectionTimeout(int timeout)
+void ctkDICOMQuery::setConnectionTimeout(const int& timeout)
 {
   Q_D(ctkDICOMQuery);
   d->SCU->setACSETimeout(timeout);
@@ -255,20 +238,6 @@ int ctkDICOMQuery::connectionTimeout() const
 {
   Q_D(const ctkDICOMQuery);
   return d->SCU->getConnectionTimeout();
-}
-
-//------------------------------------------------------------------------------
-void ctkDICOMQuery::setMaximumPatientsQuery(int maximumPatientsQuery)
-{
-  Q_D(ctkDICOMQuery);
-  d->MaximumPatientsQuery = maximumPatientsQuery;
-}
-
-//------------------------------------------------------------------------------
-int ctkDICOMQuery::maximumPatientsQuery()
-{
-  Q_D(const ctkDICOMQuery);
-  return d->MaximumPatientsQuery;
 }
 
 //------------------------------------------------------------------------------
@@ -317,20 +286,6 @@ QList<QSharedPointer<ctkDICOMJobResponseSet>> ctkDICOMQuery::jobResponseSetsShar
 {
   Q_D(const ctkDICOMQuery);
   return d->JobResponseSets;
-}
-
-//------------------------------------------------------------------------------
-void ctkDICOMQuery::setJobUID(const QString &jobUID)
-{
-  Q_D(ctkDICOMQuery);
-  d->JobUID = jobUID;
-}
-
-//------------------------------------------------------------------------------
-QString ctkDICOMQuery::jobUID() const
-{
-  Q_D(const ctkDICOMQuery);
-  return d->JobUID;
 }
 
 //------------------------------------------------------------------------------
@@ -384,10 +339,9 @@ bool ctkDICOMQuery::query(ctkDICOMDatabase& database)
 
   // Make clear we define our search values in ISO Latin 1 (default would be ASCII)
   d->QueryDcmDataset->putAndInsertOFStringArray(DCM_SpecificCharacterSet, "ISO_IR 100");
-
   d->QueryDcmDataset->putAndInsertString (DCM_QueryRetrieveLevel, "STUDY");
 
-  QString seriesDescription = this->applyFilters();
+  QString seriesDescription = this->applyFilters(d->Filters);
   if (d->Canceled)
   {
     return false;
@@ -419,7 +373,7 @@ bool ctkDICOMQuery::query(ctkDICOMDatabase& database)
   {
     logger.error("Find failed");
     emit progress(tr("Find failed"));
-    d->SCU->releaseAssociation();
+    d->releaseAssociation();
     emit progress(100);
     return false;
   }
@@ -523,7 +477,7 @@ bool ctkDICOMQuery::query(ctkDICOMDatabase& database)
     return false;
     }
   }
-  d->SCU->releaseAssociation();
+  d->releaseAssociation();
   emit progress(100);
   return true;
 }
@@ -557,21 +511,15 @@ bool ctkDICOMQuery::queryPatients()
   d->QueryDcmDataset->insertEmptyElement(DCM_PatientID);
   d->QueryDcmDataset->insertEmptyElement(DCM_PatientName);
   d->QueryDcmDataset->insertEmptyElement(DCM_PatientBirthDate);
-  d->QueryDcmDataset->insertEmptyElement(DCM_StudyID);
-  d->QueryDcmDataset->insertEmptyElement(DCM_StudyInstanceUID);
-  d->QueryDcmDataset->insertEmptyElement(DCM_StudyDescription);
-  d->QueryDcmDataset->insertEmptyElement(DCM_StudyDate);
-  d->QueryDcmDataset->insertEmptyElement(DCM_StudyTime);
-  d->QueryDcmDataset->insertEmptyElement(DCM_ModalitiesInStudy);
-  d->QueryDcmDataset->insertEmptyElement(DCM_AccessionNumber);
-  d->QueryDcmDataset->insertEmptyElement(DCM_NumberOfStudyRelatedSeries); // Number of series in the study
 
   // Make clear we define our search values in ISO Latin 1 (default would be ASCII)
   d->QueryDcmDataset->putAndInsertOFStringArray(DCM_SpecificCharacterSet, "ISO_IR 100");
-
   d->QueryDcmDataset->putAndInsertString(DCM_QueryRetrieveLevel, "PATIENT");
 
-  QString seriesDescription = this->applyFilters();
+  QMap<QString,QVariant> filters;
+  filters["Name"] = d->Filters["Name"];
+  filters["ID"] = d->Filters["ID"];
+  this->applyFilters(filters);
   if (d->Canceled)
   {
     return false;
@@ -623,7 +571,6 @@ bool ctkDICOMQuery::queryPatients()
       {
         logger.warn(QString("ctkDICOMQuery: the number of responses of the query task at patients level "
                             "surpassed the maximum value of permitted results (i.e. %1).").arg(d->MaximumPatientsQuery));
-
         break;
       }
       DcmDataset *dataset = (*it)->m_dataset;
@@ -653,7 +600,7 @@ bool ctkDICOMQuery::queryPatients()
     return false;
   }
 
-  d->SCU->releaseAssociation();
+  d->releaseAssociation();
   return true;
 }
 
@@ -696,10 +643,17 @@ bool ctkDICOMQuery::queryStudies(const QString& patientID)
 
   // Make clear we define our search values in ISO Latin 1 (default would be ASCII)
   d->QueryDcmDataset->putAndInsertOFStringArray(DCM_SpecificCharacterSet, "ISO_IR 100");
-
   d->QueryDcmDataset->putAndInsertString(DCM_QueryRetrieveLevel, "STUDY");
 
-  QString seriesDescription = this->applyFilters();
+  QMap<QString,QVariant> filters;
+  filters["Name"] = d->Filters["Name"];
+  filters["ID"] = d->Filters["ID"];
+  filters["Study"] = d->Filters["Study"];
+  filters["AccessionNumber"] = d->Filters["AccessionNumber"];
+  filters["Modalities"] = d->Filters["Modalities"];
+  filters["StartDate"] = d->Filters["StartDate"];
+  filters["EndDate"] = d->Filters["EndDate"];
+  this->applyFilters(filters);
   if (d->Canceled)
   {
     return false;
@@ -776,7 +730,7 @@ bool ctkDICOMQuery::queryStudies(const QString& patientID)
     return false;
   }
 
-  d->SCU->releaseAssociation();
+  d->releaseAssociation();
   return true;
 }
 
@@ -813,7 +767,15 @@ bool ctkDICOMQuery::querySeries(const QString& patientID,
   d->QueryDcmDataset->insertEmptyElement(DCM_Modality);
   d->QueryDcmDataset->insertEmptyElement(DCM_NumberOfSeriesRelatedInstances); // Number of images in the series
 
-  QString seriesDescription = this->applyFilters();
+  QMap<QString,QVariant> filters;
+  filters["Name"] = d->Filters["Name"];
+  filters["ID"] = d->Filters["ID"];
+  filters["Study"] = d->Filters["Study"];
+  filters["AccessionNumber"] = d->Filters["AccessionNumber"];
+  filters["StartDate"] = d->Filters["StartDate"];
+  filters["EndDate"] = d->Filters["EndDate"];
+  filters["Series"] = d->Filters["Series"];
+  QString seriesDescription = this->applyFilters(filters);
   if (d->Canceled)
   {
     return false;
@@ -821,8 +783,6 @@ bool ctkDICOMQuery::querySeries(const QString& patientID,
 
   /* Add user-defined filters */
   d->QueryDcmDataset->putAndInsertOFStringArray(DCM_SeriesDescription, seriesDescription.toLatin1().data());
-
-  // Now search each within each Study that was identified
   d->QueryDcmDataset->putAndInsertString(DCM_QueryRetrieveLevel, "SERIES");
 
   Uint16 presentationContext = 0;
@@ -898,7 +858,7 @@ bool ctkDICOMQuery::querySeries(const QString& patientID,
     return false;
   }
 
-  d->SCU->releaseAssociation();
+  d->releaseAssociation();
   return true;
 }
 
@@ -933,7 +893,15 @@ bool ctkDICOMQuery::queryInstances(const QString& patientID,
   d->QueryDcmDataset->insertEmptyElement(DCM_Rows);
   d->QueryDcmDataset->insertEmptyElement(DCM_Columns);
 
-  QString seriesDescription = this->applyFilters();
+  QMap<QString,QVariant> filters;
+  filters["Name"] = d->Filters["Name"];
+  filters["ID"] = d->Filters["ID"];
+  filters["Study"] = d->Filters["Study"];
+  filters["AccessionNumber"] = d->Filters["AccessionNumber"];
+  filters["StartDate"] = d->Filters["StartDate"];
+  filters["EndDate"] = d->Filters["EndDate"];
+  filters["Series"] = d->Filters["Series"];
+  QString seriesDescription = this->applyFilters(filters);
   if (d->Canceled)
   {
     return false;
@@ -941,8 +909,6 @@ bool ctkDICOMQuery::queryInstances(const QString& patientID,
 
   /* Add user-defined filters */
   d->QueryDcmDataset->putAndInsertOFStringArray(DCM_SeriesDescription, seriesDescription.toLatin1().data());
-
-  // Now search each within each Study that was identified
   d->QueryDcmDataset->putAndInsertString(DCM_QueryRetrieveLevel, "IMAGE");
 
   // Check for any accepted presentation context for FIND in study root (don't care about transfer syntax)
@@ -1018,7 +984,7 @@ bool ctkDICOMQuery::queryInstances(const QString& patientID,
     return false;
   }
 
-  d->SCU->releaseAssociation();
+  d->releaseAssociation();
   return true;
 }
 
@@ -1033,6 +999,13 @@ void ctkDICOMQuery::cancel()
     d->SCU->sendCANCELRequest(d->PresentationContext);
     d->PresentationContext = 0;
   }
+}
+
+//----------------------------------------------------------------------------
+void ctkDICOMQuery::releaseAssociation()
+{
+  Q_D(ctkDICOMQuery);
+  d->releaseAssociation();
 }
 
 //----------------------------------------------------------------------------
@@ -1087,7 +1060,7 @@ bool ctkDICOMQuery::initializeSCU()
 }
 
 //----------------------------------------------------------------------------
-QString ctkDICOMQuery::applyFilters()
+QString ctkDICOMQuery::applyFilters(QMap<QString,QVariant> filters)
 {
   Q_D(ctkDICOMQuery);
 
@@ -1096,49 +1069,49 @@ QString ctkDICOMQuery::applyFilters()
    * Study Description, Modalities in Study, and Study Date are used.
    */
   QString seriesDescription;
-  foreach(QString key, d->Filters.keys())
+  foreach(QString key, filters.keys())
   {
-    if ( key == QString("Name") && !d->Filters[key].toString().isEmpty())
+    if (key == QString("Name") && !filters[key].toString().isEmpty())
     {
       // make the filter a wildcard in dicom style
-      d->QueryDcmDataset->putAndInsertString( DCM_PatientName,
-        (QString("*") + d->Filters[key].toString() + QString("*")).toLatin1().data());
+      d->QueryDcmDataset->putAndInsertString(DCM_PatientName,
+        (QString("*") + filters[key].toString() + QString("*")).toLatin1().data());
     }
-    else if ( key == QString("Study") && !d->Filters[key].toString().isEmpty())
+    else if (key == QString("ID") && !filters[key].toString().isEmpty())
     {
       // make the filter a wildcard in dicom style
-      d->QueryDcmDataset->putAndInsertString( DCM_StudyDescription,
-        (QString("*") + d->Filters[key].toString() + QString("*")).toLatin1().data());
+      d->QueryDcmDataset->putAndInsertString(DCM_PatientID,
+        (QString("*") + filters[key].toString() + QString("*")).toLatin1().data());
     }
-    else if ( key == QString("ID") && !d->Filters[key].toString().isEmpty())
+    else if (key == QString("Study") && !filters[key].toString().isEmpty())
     {
       // make the filter a wildcard in dicom style
-      d->QueryDcmDataset->putAndInsertString( DCM_PatientID,
-        (QString("*") + d->Filters[key].toString() + QString("*")).toLatin1().data());
+      d->QueryDcmDataset->putAndInsertString(DCM_StudyDescription,
+        (QString("*") + filters[key].toString() + QString("*")).toLatin1().data());
     }
-    else if (key == QString("AccessionNumber") && !d->Filters[key].toString().isEmpty())
+    else if (key == QString("AccessionNumber") && !filters[key].toString().isEmpty())
     {
-        // make the filter a wildcard in dicom style
-        d->QueryDcmDataset->putAndInsertString(DCM_AccessionNumber,
-            (QString("*") + d->Filters[key].toString() + QString("*")).toLatin1().data());
+      // make the filter a wildcard in dicom style
+      d->QueryDcmDataset->putAndInsertString(DCM_AccessionNumber,
+        (QString("*") + filters[key].toString() + QString("*")).toLatin1().data());
     }
-    else if ( key == QString("Modalities") && !d->Filters[key].toString().isEmpty())
+    else if (key == QString("Modalities") && filters[key].toStringList().count() != 0)
     {
       // make the filter be an "OR" of modalities using backslash (dicom-style)
       QString modalitySearch("");
-      foreach (const QString& modality, d->Filters[key].toStringList())
+      foreach (const QString& modality, filters[key].toStringList())
       {
         modalitySearch += modality + QString("\\");
       }
       modalitySearch.chop(1); // remove final backslash
       logger.debug("modalityInStudySearch " + modalitySearch);
-      d->QueryDcmDataset->putAndInsertString( DCM_ModalitiesInStudy, modalitySearch.toLatin1().data() );
+      d->QueryDcmDataset->putAndInsertString(DCM_ModalitiesInStudy, modalitySearch.toLatin1().data());
     }
     // Remember Series Description for later series query if we go through the keys now
-    else if ( key == QString("Series") && !d->Filters[key].toString().isEmpty())
+    else if (key == QString("Series") && !filters[key].toString().isEmpty())
     {
       // make the filter a wildcard in dicom style
-      seriesDescription = "*" + d->Filters[key].toString() + "*";
+      seriesDescription = "*" + filters[key].toString() + "*";
     }
     else
     {
@@ -1146,12 +1119,13 @@ QString ctkDICOMQuery::applyFilters()
     }
   }
 
-  if ( d->Filters.keys().contains("StartDate") && d->Filters.keys().contains("EndDate") )
+  if (filters.keys().contains("StartDate") && filters.keys().contains("EndDate") &&
+    !filters["StartDate"].toString().isEmpty() && !filters["EndDate"].toString().isEmpty())
   {
-    QString dateRange = d->Filters["StartDate"].toString() +
+    QString dateRange = filters["StartDate"].toString() +
                         QString("-") +
-                        d->Filters["EndDate"].toString();
-    d->QueryDcmDataset->putAndInsertString ( DCM_StudyDate, dateRange.toLatin1().data() );
+                        filters["EndDate"].toString();
+    d->QueryDcmDataset->putAndInsertString (DCM_StudyDate, dateRange.toLatin1().data());
     logger.debug("Query on study date " + dateRange);
   }
 

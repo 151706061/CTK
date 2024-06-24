@@ -79,8 +79,9 @@ class CTK_DICOM_WIDGETS_EXPORT ctkDICOMVisualBrowserWidget : public QWidget
   Q_PROPERTY(QString databaseDirectoryBase READ databaseDirectoryBase WRITE setDatabaseDirectoryBase)
   Q_PROPERTY(QString filteringPatientID READ filteringPatientID WRITE setFilteringPatientID);
   Q_PROPERTY(QString filteringPatientName READ filteringPatientName WRITE setFilteringPatientName);
-  Q_PROPERTY(int numberOfStudiesPerPatient READ numberOfStudiesPerPatient WRITE setNumberOfStudiesPerPatient);
+  Q_PROPERTY(int numberOfOpenedStudiesPerPatient READ numberOfOpenedStudiesPerPatient WRITE setNumberOfOpenedStudiesPerPatient);
   Q_PROPERTY(ctkDICOMStudyItemWidget::ThumbnailSizeOption thumbnailSize READ thumbnailSize WRITE setThumbnailSize);
+  Q_PROPERTY(ctkDICOMVisualBrowserWidget::ImportDirectoryMode ImportDirectoryMode READ importDirectoryMode WRITE setImportDirectoryMode)
   Q_PROPERTY(bool sendActionVisible READ isSendActionVisible WRITE setSendActionVisible)
   Q_PROPERTY(bool deleteActionVisible READ isDeleteActionVisible WRITE setDeleteActionVisible)
   Q_PROPERTY(QString storageAETitle READ storageAETitle WRITE setStorageAETitle);
@@ -153,7 +154,7 @@ public:
 
   ///@{
   /// Servers
-  Q_INVOKABLE int getNumberOfServers();
+  Q_INVOKABLE int serversCount();
   Q_INVOKABLE ctkDICOMServer* getNthServer(int id);
   Q_INVOKABLE ctkDICOMServer* getServer(const QString& connectionName);
   Q_INVOKABLE void addServer(ctkDICOMServer* server);
@@ -213,11 +214,14 @@ public:
   QStringList filteringModalities() const;
   ///@}
 
+  /// reset all the filters
+  Q_INVOKABLE void resetFilters();
+
   ///@{
   /// Number of non collapsed studies per patient
   /// 2 by default
-  void setNumberOfStudiesPerPatient(int numberOfStudiesPerPatient);
-  int numberOfStudiesPerPatient() const;
+  void setNumberOfOpenedStudiesPerPatient(int numberOfOpenedStudiesPerPatient);
+  int numberOfOpenedStudiesPerPatient() const;
   ///@}
 
   ///@{
@@ -235,7 +239,7 @@ public:
   ///@}
 
   ///@{
-  /// Set if cancel action on right click context menu is available
+  /// Set if delete action on right click context menu is available
   /// true by default
   void setDeleteActionVisible(bool visible);
   bool isDeleteActionVisible() const;
@@ -243,7 +247,7 @@ public:
 
   ///@{
   /// Add/Remove Patient item widget
-  Q_INVOKABLE void addPatientItemWidget(const QString& patientItem);
+  Q_INVOKABLE int addPatientItemWidget(const QString& patientItem);
   Q_INVOKABLE void removePatientItemWidget(const QString& patientItem);
   ///@}
 
@@ -259,7 +263,7 @@ public:
   ///@}
 
   /// Set counters of imported patients, studies, series, instances to zero.
-  void resetItemsAddedDuringImportCounters();
+  Q_INVOKABLE void resetItemsAddedDuringImportCounters();
 
   enum ImportDirectoryMode
   {
@@ -345,23 +349,53 @@ public Q_SLOTS:
   /// Update database in-place to required schema version
   void updateDatabase();
 
-  void onWarningPushButtonClicked();
+  ///@{
+  /// slots to capture change in the filtering parameters for the query
   void onFilteringPatientIDChanged();
   void onFilteringPatientNameChanged();
   void onFilteringStudyDescriptionChanged();
   void onFilteringSeriesDescriptionChanged();
   void onFilteringModalityCheckableComboBoxChanged();
   void onFilteringDateComboBoxChanged(int);
+  ///@}
+
+  /// start query/retrieve and show patients
   void onQueryPatients();
+  /// toggle query/retrieve option on search button
+  void onQueryRetrieveOptionToggled(bool);
+  /// show patients
   void onShowPatients();
-  void updateGUIFromScheduler(const QVariant&);
-  void onJobFailed(const QVariant&);
-  void onPatientItemChanged(int);
+
+  ///@{
+  /// update GUI after query/retrieve operations
+  void updateGUIFromScheduler(QList<QVariant>);
+  void onJobStarted(QList<QVariant>);
+  void onJobUserStopped(QList<QVariant>);
+  void onJobFailed(QList<QVariant>);
+  void onJobFinished(QList<QVariant>);
+  ///@}
+
+  /// stops all the operations
+  void onStop(bool stopPersistentTasks = false);
+
+  ///@{
+  /// high level UI slots: close, load, warning
   void onClose();
   void onLoad();
-  void onImport();
-  void onStop(bool stopPersistentTasks = false);
-  void setCurrentTabWidget(ctkDICOMPatientItemWidget* patientItemWidget);
+  void onWarningPushButtonClicked();
+  ///@}
+
+  /// user change patient selection
+  void onPatientItemChanged(int);
+
+  /// user clicked on patient tab item
+  void onOperationStatusTabBarItemClicked(int);
+
+  /// server settings have been changed
+  void onServersSettingsChanged();
+
+  /// user selected a job in the job list widget
+  void patientSelectedOnJobList(const QString&, const QString&, const QString&);
 
 Q_SIGNALS:
   /// Emitted when directory is changed
@@ -374,8 +408,11 @@ Q_SIGNALS:
   void directoryImported();
 
 protected:
-  void closeEvent(QCloseEvent*);
   QScopedPointer<ctkDICOMVisualBrowserWidgetPrivate> d_ptr;
+
+  /// Reimplemented for internal reasons
+  virtual void closeEvent(QCloseEvent*);
+  virtual void keyPressEvent(QKeyEvent* event);
 
   /// Confirm with the user that they wish to delete the selected uids.
   /// Add information about the selected UIDs to a message box, checks
@@ -418,6 +455,8 @@ protected Q_SLOTS:
   void showSeriesContextMenu(const QPoint& point);
   /// Called when clicking patients tab menu
   void onPatientsTabMenuToolButtonClicked();
+  /// Called when patient widget update is finished
+  void onPatientUpdateGUIFinished();
 
 private:
   Q_DECLARE_PRIVATE(ctkDICOMVisualBrowserWidget);

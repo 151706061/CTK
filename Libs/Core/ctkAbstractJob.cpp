@@ -46,12 +46,6 @@ ctkAbstractJob::~ctkAbstractJob()
 }
 
 //----------------------------------------------------------------------------
-void ctkAbstractJob::setJobUID(const QString &jobUID)
-{
-  this->JobUID = jobUID;
-}
-
-//----------------------------------------------------------------------------
 QString ctkAbstractJob::className() const
 {
   if (!this->metaObject())
@@ -65,6 +59,12 @@ QString ctkAbstractJob::className() const
 QString ctkAbstractJob::jobUID() const
 {
   return this->JobUID;
+}
+
+//----------------------------------------------------------------------------
+void ctkAbstractJob::setJobUID(const QString &jobUID)
+{
+  this->JobUID = jobUID;
 }
 
 //----------------------------------------------------------------------------
@@ -91,9 +91,13 @@ void ctkAbstractJob::setStatus(JobStatus status)
   {
     emit this->started();
   }
-  else if (this->Status == JobStatus::Stopped)
+  else if (this->Status == JobStatus::UserStopped)
   {
-    emit this->canceled();
+    emit this->userStopped();
+  }
+  else if (this->Status == JobStatus::AttemptFailed)
+  {
+    emit this->attemptFailed();
   }
   else if (this->Status == JobStatus::Failed)
   {
@@ -193,6 +197,35 @@ QDateTime ctkAbstractJob::startDateTime() const
 QDateTime ctkAbstractJob::completionDateTime() const
 {
   return this->CompletionDateTime;
+}
+
+//----------------------------------------------------------------------------
+QString ctkAbstractJob::runningThreadID() const
+{
+  return this->RunningThreadID;
+}
+
+//----------------------------------------------------------------------------
+void ctkAbstractJob::setRunningThreadID(QString runningThreadID)
+{
+  this->RunningThreadID = runningThreadID;
+}
+
+//----------------------------------------------------------------------------
+QString ctkAbstractJob::loggedText() const
+{
+  return this->LoggedText;
+}
+
+//----------------------------------------------------------------------------
+void ctkAbstractJob::setLoggedText(QString loggedText)
+{
+  if (loggedText.isEmpty())
+  {
+    return;
+  }
+
+  this->LoggedText += loggedText;
 }
 
 //----------------------------------------------------------------------------

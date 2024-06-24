@@ -41,6 +41,7 @@ class CTK_DICOM_CORE_EXPORT ctkDICOMJob : public ctkAbstractJob
 {
   Q_OBJECT
   Q_ENUMS(DICOMLevel)
+  Q_PROPERTY(QString patientID READ patientID WRITE setPatientID);
   Q_PROPERTY(QString studyInstanceUID READ studyInstanceUID WRITE setStudyInstanceUID);
   Q_PROPERTY(QString seriesInstanceUID READ seriesInstanceUID WRITE setSeriesInstanceUID);
   Q_PROPERTY(QString sopInstanceUID READ sopInstanceUID WRITE setSOPInstanceUID);
@@ -54,6 +55,7 @@ public:
 
   enum DICOMLevels
   {
+    None,
     Patients,
     Studies,
     Series,
@@ -139,7 +141,6 @@ struct CTK_DICOM_CORE_EXPORT ctkDICOMJobDetail : ctkJobDetail
 
   explicit ctkDICOMJobDetail(const ctkDICOMJob& job) : ctkJobDetail(job)
   {
-
     this->DICOMLevel = job.dicomLevel();
     this->JobType = job.getJobType();
     this->PatientID = job.patientID();
@@ -178,7 +179,7 @@ struct CTK_DICOM_CORE_EXPORT ctkDICOMJobDetail : ctkJobDetail
   QString ConnectionName;
 
   // Specific to DICOM Query and Retrieve jobs
-  ctkDICOMJob::DICOMLevels DICOMLevel{ctkDICOMJob::DICOMLevels::Patients};
+  ctkDICOMJob::DICOMLevels DICOMLevel{ctkDICOMJob::DICOMLevels::None};
 
   // Specific to DICOM JobResponseSet
   ctkDICOMJobResponseSet::JobType JobType{ctkDICOMJobResponseSet::JobType::None};

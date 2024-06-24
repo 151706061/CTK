@@ -40,6 +40,7 @@ class ctkDICOMScheduler;
 
 // ctkDICOMWidgets includes
 #include "ctkDICOMSeriesItemWidget.h"
+
 class ctkDICOMSeriesItemWidget;
 class ctkDICOMStudyItemWidgetPrivate;
 
@@ -57,10 +58,17 @@ class CTK_DICOM_WIDGETS_EXPORT ctkDICOMStudyItemWidget : public QWidget
   Q_PROPERTY(int numberOfSeriesPerRow READ numberOfSeriesPerRow);
   Q_PROPERTY(ThumbnailSizeOption thumbnailSize READ thumbnailSize WRITE setThumbnailSize);
   Q_PROPERTY(int thumbnailSizePixel READ thumbnailSizePixel);
+  Q_PROPERTY(int selection READ selection WRITE setSelection);
+  Q_PROPERTY(QString filteringSeriesDescription READ filteringSeriesDescription WRITE setFilteringSeriesDescription);
+  Q_PROPERTY(QStringList filteringModalities READ filteringModalities WRITE setFilteringModalities);
+  Q_PROPERTY(int filteredSeriesCount READ filteredSeriesCount);
+  Q_PROPERTY(QStringList allowedServers READ allowedServers WRITE setAllowedServers);
+  Q_PROPERTY(OperationStatus operationStatus READ operationStatus WRITE setOperationStatus);
 
 public:
   typedef QWidget Superclass;
-  explicit ctkDICOMStudyItemWidget(QWidget* parent = nullptr);
+  explicit ctkDICOMStudyItemWidget(QWidget* top = nullptr,
+                                   QWidget* parent = nullptr);
   virtual ~ctkDICOMStudyItemWidget();
 
   ///@{
@@ -139,6 +147,31 @@ public:
   QStringList filteringModalities() const;
   ///@}
 
+  /// Filtered series count
+  int filteredSeriesCount() const;
+
+  ///@{
+  /// Allowed Servers
+  /// Empty by default
+  void setAllowedServers(const QStringList& allowedServers);
+  QStringList allowedServers() const;
+  ///@}
+
+  enum OperationStatus
+  {
+    NoOperation = 0,
+    InProgress,
+    Completed,
+    Failed,
+  };
+
+  ///@{
+  /// Set the operation status
+  /// NoOperation by default
+  void setOperationStatus(const OperationStatus& status);
+  OperationStatus operationStatus() const;
+  ///@}
+
   /// Return the scheduler.
   Q_INVOKABLE ctkDICOMScheduler* scheduler() const;
   /// Return the scheduler as a shared pointer
@@ -168,20 +201,35 @@ public:
   Q_INVOKABLE QList<ctkDICOMSeriesItemWidget*> seriesItemWidgetsList() const;
 
   /// Add/Remove Series item widget
-  Q_INVOKABLE void addSeriesItemWidget(int tableIndex,
-                                       const QString& seriesItem,
-                                       const QString& seriesInstanceUID,
-                                       const QString& modality,
-                                       const QString& seriesDescription);
+  Q_INVOKABLE ctkDICOMSeriesItemWidget* addSeriesItemWidget(int tableIndex,
+                                                            const QString& seriesItem,
+                                                            const QString& seriesInstanceUID,
+                                                            const QString& modality,
+                                                            const QString& seriesDescription);
   Q_INVOKABLE void removeSeriesItemWidget(const QString& seriesItem);
 
   /// Collapsible group box.
   Q_INVOKABLE ctkCollapsibleGroupBox* collapsibleGroupBox();
 
 public Q_SLOTS:
-  void generateSeries(bool toggled = true);
-  void updateGUIFromScheduler(const QVariant& data);
+  void generateSeries(bool query = true, bool retrieve = true);
+  void updateGUIFromScheduler(const QVariant&);
+  void onJobStarted(const QVariant&);
+  void onJobUserStopped(const QVariant&);
+  void onJobFailed(const QVariant&);
+  void onJobFinished(const QVariant&);
   void onStudySelectionClicked(bool);
+  void onOperationStatusButtonClicked(bool);
+
+Q_SIGNALS:
+  /// Emitted when the GUI finished to update after a series query.
+  void updateGUIFinished();
+  /// Propagate jobs signals to the tree
+  void jobStarted(QVariant);
+  void jobUserStopped(QVariant);
+  void jobFinished(QVariant);
+  void jobFailed(QVariant);
+  void progressJobDetail(QVariant);
 
 protected:
   QScopedPointer<ctkDICOMStudyItemWidgetPrivate> d_ptr;

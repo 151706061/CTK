@@ -59,6 +59,7 @@ public:
   ctkDICOMSchedulerPrivate(ctkDICOMScheduler& obj);
   virtual ~ctkDICOMSchedulerPrivate();
 
+  bool isServerAllowed(ctkDICOMServer* server, const QStringList& allowedSeversForPatient);
   ctkDICOMServer* getServerFromProxyServersByConnectionName(const QString&);
 
   QSharedPointer<ctkDICOMDatabase> DicomDatabase;
@@ -66,6 +67,8 @@ public:
   QMap<QString, QVariant> Filters;
 
   int MaximumPatientsQuery{25};
+
+  dcmtk::log4cplus::SharedAppenderPtr Appender;
 };
 
 #endif
